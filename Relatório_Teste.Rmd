@@ -1,0 +1,162 @@
+---
+title: "Relatório de Exemplo"
+author: "Raphael Vieira dos Santos"
+output: html_document
+---
+
+## 0) O que modificar?
+  
+  * Inclusão de código no texto  
+  * Formatação de tabela  
+  * Criação de abas  
+  * Data automática  
+  * Criação de sumário  
+  * Highlight do código  
+  * Escolha de um estilo  
+
+## 1) Como formatar o relatório?
+
+  Texto teste para descrever o que precisa aparecer na tela.  
+  Precisamos dar dois espaços.
+  
+  Exemplo de como destacar e formatar palavras:
+  "O **valor** de p *obtido* foi de 0,08."  
+  
+  Como fazer um sobrescrito e subscrito:  
+  "O R^2^ foi de 35%." - **sobrescrito**  
+  "O teste mostrou diferença entre os grupos (t~12~ = 3,25, p < 0,001)." - **subscrito**
+  
+  "A homogeneidade foi analisada pelo teste de Levene: `leveneTest`.  
+  
+  
+  
+## 2) Como fazer citação?  
+  
+  > Citação direta, *que também pode ser formatada*.
+  
+  
+  
+## 3) Inserindo Imagens e links  
+
+[Canal da aula no Youtube](https://www.youtube.com/watch?v=obxa5VH4WvY&list=PLOw62cBQ5j9VE9X4cCCfFMjW_hhEAJUhU&index=18)  
+![Logo Linguagem R](https://marketplace-assets.digitalocean.com/logos/rstudio-20-04.svg){ width=20% }
+  
+  
+  
+## 4) Criando notas de rodapé  
+  
+  Exemplo: "quem falou sobre isso foi Fulano de Tal[^1].  
+  
+  [^1]: Fulano mencionou isso, isso e isso no livro X.  
+  
+  
+  
+## 5) Exemplo de Lista de Itens  
+  
+**Exemplo 1**  
+  
+* Item 1  
+    + Subitem i  
+    + Subitem ii  
+        - Sub-subitem i  
+* Item 2  
+* Item 3  
+  
+**Exemplo 2**
+  
+`1. Item`  
+`    i) Subitem`  
+`        A. Sub-subitem`  
+  
+**Exemplo 3**
+  
+1. Item 1
+    i) Subitem 1
+    ii) Subitem 2
+        A. Sub-subitem 1
+2. Item 2
+3. Item 3
+  
+  
+  
+## 6) Adicionando Equações  
+  
+As equações no RMarkdown são escritas com linguagem LaTex.  
+  
+Para que a equação apareça no meio do texto, devemos escrevê-la entre dois cifrões:  
+`$equação$`
+  
+"Esse cálculo é realizado pela equação $\sum_{i = 1} (x_i - \mu)^2$, como comentado no item  
+anterior."  
+  
+Para que a equação no formato destacado (display), deve ser colocada entre quatro cifrões:  
+`$$equação$$`
+  
+Esse cálculo é realizado através da equação abaixo:  
+$$\sum_{i = 1}^{n}\left( \frac{X_i}{Y_i} \right)$$  
+  
+  
+  
+## 7) Incluindo códigos R
+  
+Para adicionar qualquer código em R, devemos iniciar com três crases, seguidas por `{r}` e  
+para encerrar o bloco de código, devemos fechá-lo com outras três crases.  
+  
+**Exemplos**  
+  
+```{r Carregamento de Pacotes}
+library(dplyr)
+library(rstatix)
+dados <-  read.csv2("Banco de Dados 6.csv")
+glimpse(dados)
+```
+**Visualizando o Banco de Dados (desformatado)**  
+  
+```{r Visualização do Banco de Dados}
+head(dados, 10)
+```
+  
+**Visualizando em tabela (das 10 primeiras entradas)**  
+  
+```{r}
+library(knitr)
+kable(head(dados, 10))
+```
+**Visualizando em todas as entradas e separado por página.**
+  
+```{r}
+library(rmarkdown)
+paged_table(dados)
+```
+**Opções para o "chunk":**
+  
+* `eval = FALSE`: Exclui o resultado, mas não a fórmula.
+* `echo = FALSE`: Exclui a fórmula, mas não o resultado.
+* `include = FALSE`: Exclui o resultado e a fórmula, mas o chunk ainda é rodado.
+* `message = FALSE`: Exclui as mensagens.
+* `warning = FALSE`: Exclui os avisos.
+  
+**Usando `eval = FALSE`:**  
+  
+```{r, eval = FALSE}
+boxplot(dados$Memoria ~ dados$Genero)  
+```
+  
+**Usando `include = FALSE`:**  
+  
+```{r, include = FALSE}
+library(car)
+```  
+  
+**Usando `warning = FALSE`:**
+  
+```{r, warning = FALSE, message = FALSE}
+library(car)
+```  
+  
+```{r}
+leveneTest(Memoria ~ Genero, dados)
+```
+  
+  
+  

@@ -1,0 +1,235 @@
+---
+title: "Qui-Quadrado de Aderência"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: cabecalho.html
+    theme: flatly
+    number_sections: no
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+<p style="text-align: justify;">O Qui-Quadrado de independência, visto anteriormente, é o qui-quadrado que verifica a associação entre duas variáveis categóricas. No entanto existem outros dois testes QUi-quadrado, o de **aderência** e o de **homogeneidade**. O qui-quadrado de aderência também é conhecido como teste da "qualidade de ajustamento dos dados", onde temos uma única variável categórica e o que buscamos é comparar as frequências das categorias dessa variável, com alguma frequência esperada e hipotética. Verificaremos também que o teste do qui-quadrado de homogeneidade segue uma lógica parecida.</p>  
+  
+# O que vamos executar?  
+  
+* Calcular o qui-quadrado de aderência;  
+* Obter os resíduos padronizados ajustados;  
+* Fazer o "post-hoc" do qui-quadrado, através da análise dos resíduos ajustados, com correção do nível de significância;  
+* Descrever os resultados.    
+  
+<br>
+<br>
+  
+# Situação problema  
+  
+<p style="text-align: justify;">Mendel previu que o resultado do cruzamento de ervilhas amarelas lisas com verdes rugosas seguiria uma distribuição lógica, e um pesquisador resolveu reproduzir a pesquisa a fim de verificar se a matriz de probabilidades segue a mesma distribuição lógica da que foi prevista por Mendel.</p>  
+  
+<p style="text-align: justify;">Exploraremos se as frequências esperadas na análise do pesquisador se encaixam nas frequências esperadas que Mendel verificou.</p>  
+
+  
+<br>
+<br>
+<br>
+<br>
+  
+# Efetuando a Análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr") 
+library(dplyr)
+if(!require(tidyr)) install.packages("tidyr") 
+library(tidyr)
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)
+if(!require(psych)) install.packages("psych") 
+library(psych)
+if(!require(data.table)) install.packages("data.table")
+library(data.table)
+if(!require(DT)) install.packages("DT")
+library(DT)
+if(!require(knitr)) install.packages("knitr")
+library(knitr)
+if(!require(kableExtra)) install.packages("kableExtra")
+library(kableExtra)
+if(!require(corrplot)) install.packages("corrplot") 
+library(corrplot)
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 2: Carregar o banco de dados  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+    
+```{r, warning=FALSE, message=FALSE}
+## Incluindo os dados
+dados <- read.csv2('Banco de Dados 9.1.csv',
+                    fileEncoding = "latin1")
+glimpse(dados)
+
+## Criação da tabela de frequência
+tabela <- table(dados$Tipo_Ervilha)
+
+## Exibição da tabela de frequência
+dados$Tipo_Ervilha <- factor(dados$Tipo_Ervilha,
+                             levels = c("Amarela Lisa",
+                                        "Amarela Rugosa",
+                                        "Verde Lisa",
+                                        "Verde Rugosa"))
+
+matriz_final <- xtabs(~ Tipo_Ervilha, data = dados)
+matriz_df <- as.data.frame(matriz_final)
+colnames(matriz_df) <- c("Tipo de Ervilha", "Frequência Observada")
+
+kable(head(matriz_df)) %>% 
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 3: Realização do teste de Qui-quadrado
+  
+<p style="text-align: justify;">O teste qui-quadrado feito pela função `chisq.test` efetua o teste a partir da tabela de frequência resultado da análise do pesquisador. Mas o que estamos interessados em fazer é analisar a proporção da frequência observada pelo pesquisador com a frequência verificada pela Lei de Mendel (proporções esperadas), utilizaremos a premissa do **Teste de Aderência** incluindo as proporções esperadas ao final da função.</p>  
+  
+<p style="text-align: justify;">As proporções esperadas pela Lei de Mendel serão colocadas a partir da concatenação de `p = c(0.5625, 0.1875, 0.1875, 0.0625)` na função do teste.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+
+## Realização do modelo
+
+quiqua <- chisq.test(tabela, p = c(0.5625, 0.1875, 0.1875, 0.0625))
+quiqua
+```
+  
+<p style="text-align: justify;">O resultado do teste reporta o valor do teste `X-squared`, os graus de liberdade em `df`, e o valor da estatística de p em `p-value`.</p>  
+  
+<p style="text-align: justify;">No nosso caso, a interpretação das hipóteses em `p-value` serão dadas por:</p>  
+  
+* H~0~: Frequência observada = Frequência esperada → p > 0,05  
+* H~1~: Frequência observada ≠ Frequência esperada → p ≤ 0,05  
+  
+<p style="text-align: justify;">Onde o resultado aporta para aceitarmos a hipótese nula, com os valores das frequências observadas sendo iguais as frequências esperadas.</p>  
+  
+<br>
+<br>
+  
+<p style="text-align: justify;">Agora acerca do **Qui-Quadrado de Homogeneidade**, o teste também tem uma frequência esperada, mas entendendo que todas as categorias tenham uma mesma frequência.</p>  
+  
+<p style="text-align: justify;">Ou seja, gerando o teste de homogeneidade, ele vai esperar que todas as ervilhas apareçam com a mesma frequência (1/4 amarelas lisas, 1/4 amarelas rugosas, 1/4 verdes lisas e 1/4 verdes rugosas), sendo 25% de cada tipo de ervilha. Para isso, basta usarmos a função `chisq.test` especificando a tabela que pretendemos analisar, sem inserir o padrão de aderência.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+
+## Realização do modelo
+
+quiquaH <- chisq.test(tabela)
+quiquaH
+```
+  
+<br>
+  
+<p style="text-align: justify;">A interpretação da hipótese do teste de homogeneidade segue a seguinte premissa:</p>  
+  
+* H~0~: Frequência observada é homogênea → p > 0,05  
+* H~1~: Frequência observada não é homogênea → p ≤ 0,05  
+  
+<p style="text-align: justify;">Logo, nesse caso, temos que nossa frequência observada não é homogênea, rejeitando a hipótese nula.</p>  
+  
+<p style="text-align: justify;">Dessa forma, no nosso caso poderíamos parar a análise por aqui. Seguiríamos com a análise dos resíduos para o caso em que rejeitamos a hipótese nula do teste de qui-quadrado ajustado, pois analisando os resíduos verificamos a diferença entre a frequência esperada e a frequência observada. Quando isso acontece, precisamos fazer uma análise de resíduos para saber em quais categorias essa diferença existe.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+
+## Passo 4: Análise dos resíduos padronizados ajustados  
+  
+<p style="text-align: justify;">Mesmo tendo o resultado dado como "pronto", faremos uma análise dos resíduos padronizados ajustados. Sabemos que o R libera dois tipos de resíduos, um que é chamado de *"resíduo de Pearson (padronizado)"* (obtido através do objeto gerado pelo teste qui-quadrado `quiqua$residuals`), e outro chamado de *"resíduo padronizado ajustado"* (obtido também através do objeto gerado pelo teste qui-quadrado `quiqua$stdres`).</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+## Resíduos de Pearson
+quiqua$residuals
+
+## Resíduos padronizados ajustados
+quiqua$stdres
+```
+  
+<p style="text-align: justify;">Consideramos como modelo de análise o enquadramento do resíduo ajustado com valores maiores que **1,96** ou menores que **-1,96**, para um alfa de 5% de significância.</p>  
+  
+<p style="text-align: justify;">Dependendo da quantidade de dados, é necessário que façamos um ajuste no alfa - parecido com a *correção de Bonferroni*.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+## Calculando o novo alfa
+novoalfa <- 0.05/(length(tabela))
+novoalfa
+
+## Novos limites para os resíduos padronizados ajustados
+qnorm(novoalfa/2)
+```
+  
+<p style="text-align: justify;">Isso muda diretamente na maneira como analisamos a ocorrência dos resíduos, a partir do intervalo entre `r (qnorm(novoalfa/2))` e `r ((-1)*qnorm(novoalfa/2))`.</p>  
+  
+> ``r (qnorm(novoalfa/2))` < Resíduos Significativos < `r ((-1)*qnorm(novoalfa/2))`, considerando o novo alfa (`r (novoalfa)`)`  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 5: Cálculo do `p-value` para os resíduos  
+  
+<p style="text-align: justify;">Utilizando a função `pnorm`, agrupando com a função `round` teremos o `p-value` para cada resíduo, conforme abaixo:</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+round(2*(1-pnorm(abs(quiqua$stdres))), 6)
+
+```
+  
+<p style="text-align: justify;">Consdierando o novo valor de alfa, só seriam estatisticamente significativos os resíduos que apresentem um `p-value` menor que `r (novoalfa)`.</p>  
+  
+* H~0~: Os resíduos **não** são significativos → p > `r (novoalfa)`  
+* H~1~: Os resíduos são significativos → p ≤ `r (novoalfa)`  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 6: Cálculo do *V de Cramer* para avaliar o tamanho do efeito
+  
+<p style="text-align: justify;">Utilizamos a função `cramer_v` para avaliar tanto o teste de homogeneidade quanto o de aderência, conforme o teste do qui-quadrado verificado anteriormente. Para avaliar a homogeneidade, não inserimos parâmetro dentro da função, mas para aderência, inserimos um parâmetro sobre o qual o teste se baseará. Como nesse caso estamos avaliando a aderência das observações do pesquisador com a Lei de Mendel, inseriremos os parâmetros para avaliar o tamanho do efeito na amostra coletada.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+cramer_v(tabela, p = c(0.5625, 0.1875, 0.1875, 0.0625))
+```
+  
+<p style="text-align: justify;">A interpretação do tamanho de efeito dependerá da quantidade de graus de liberdade `df`, e existe também uma sugestão sobre o tamanho de efeito grande, médio, pequeno ou despresível. No nosso caso, teremos grau de liberdade = 3 (`df = 4 colunas - 1`), e o valor de `r cramer_v(tabela, p = c(0.5625, 0.1875, 0.1875, 0.0625))` é insignificante.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+# Resultado
+  
+<p style="text-align: justify;">O teste de qui-quadrado de aderência mostrou que não há diferenças entre as frequências observadas pelo pesquisador e as frequências esperadas de acordo com a Lei de Mendel (X^2^~(3)~ = 0,470; p = 0,925; V de Cramer = 0,017).</p>  
+  
+<br>
+<br>
+<br>
+<br>

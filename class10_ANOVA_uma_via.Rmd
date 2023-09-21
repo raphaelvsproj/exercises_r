@@ -1,0 +1,204 @@
+---
+title: "Anova de uma via com medidas repetidas no R (trabalhando com dados em painel)"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: "cabecalho.html"
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+  
+**O que vamos executar?**  
+* Transpor o banco de dados do formato "wide" ("amplo") para o formato "long" ("longo" ou "dados em painel");  
+* Verificar a normalidade e a presença de *outliers* por grupo (teste de Shapiro-Wilk e função);  
+* Verificar a esfericidade (teste de Mauchly);  
+* Fazer a ANOVA de uma via com medidas repetidas e as comparações entre pares apropriadas;  
+* Pedir a estatística descritiva dos dados.  
+  
+<br>
+<br>
+  
+# Situação problema 
+  
+<p style="text-align: justify;">O `Banco de Dados 7.csv` contém as notas de 30 alunos. Os mesmos trabalhos foram avaliados por 4 professores diferentes. Verifique se o professor interfere na nota do aluno, isto é, se há efeito do professor sobre a nota. Descreva o resultado de forma apropriada.</p>  
+  
+<p style="text-align: justify;">A ANOVA de uma via com medidas repetidas é usada quando tenho uma única variável independente, e esta é uma variável intrasujeitos (within subjects). Essa é uma variável em que todos os sujeitos do banco de dados têm valores para todos os níveis. Então, no nosso caso precisamos verificar qual é a variável intrasujeitos. Então, a variável "professor" funcionará como a variável de medidas repetidas (intrasujeitos), porque a nota do aluno foi dada por cada um desses professores (um mesmo aluno sendo avaliado em cada um desses níveis).</p>  
+  
+<br>
+<br>
+  
+# Efetuando a análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados.  
+  
+```{r Carrgando os Pacotes, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr)                                
+if(!require(ez)) install.packages("ez") 
+library(ez)
+if(!require(reshape)) install.packages("reshape") 
+library(reshape) 
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)
+```
+  
+<br>
+  
+## Passo 2: Carregar o banco de dados.  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+```{r Carregando Banco de Dados, warning=FALSE, message=FALSE}
+dados <- read.csv2('Banco de Dados 7.csv', encoding = 'latin1')
+colnames(dados)[colnames(dados) == "ï..ID"] <- "ID"
+glimpse(dados)
+library(rmarkdown)
+paged_table(dados)
+```
+<br> 
+  
+## Passo 3: Alterar o formato do banco de dados de `wide` para `long` (pacote: `reshape`)  
+  
+### Reestruturando o banco de dados;  
+  
+```{r Reestruturando o banco de dados, warning=FALSE, message=FALSE}
+dadosl <- melt(dados,
+               id = "ID",
+               measured = c("Professor1", "Professor2", "Professor3", "Professor4"))
+```
+  
+<br> 
+  
+### Renomeando as colunas do novo banco;  
+  
+```{r Renomeando as colunas do novo banco, warning=FALSE, message=FALSE}
+colnames(dadosl) = c("ID", "Professor", "Nota")
+```
+  
+<br>
+  
+### Ordenando as colunas pelo sujeito experimental;  
+  
+```{r Ordenando as colunas pelo sujeito experimental, warning=FALSE, message=FALSE}
+dadosl <- sort_df(dadosl, vars = "ID")
+glimpse(dadosl)
+```
+  
+<br>
+  
+### Transformando a variável ID em fator;  
+  
+```{r Transformando a variável ID em fator, warning=FALSE, message=FALSE}
+dadosl$ID <- factor(dadosl$ID)
+paged_table(dadosl)
+```
+<br>
+  
+## Passo 4: Checar os pressupostos de normalidade e ausência de outliers (pacote: `rstatix`)  
+  
+<p style="text-align: justify;">Verificamos abaixo que as notas fora do padrão (outliers) de cada professor são dadas conforme verificado abaixo (usando o comando `identify_outliers` do pacote `rstatix`).</p>  
+  
+```{r Verificando outliers por grupo, warning=FALSE, message=FALSE}
+dadosl %>% group_by(Professor) %>% 
+  identify_outliers(Nota)
+```
+  
+<p style="text-align: justify;">Percebemos que a análise apresenta três outliers para o `Professor1`, sendo três notas bem baixas (`2.4`,`2.9` e `2.8`), verificando se é ou não um outlier (nesse caso é, pois TRUE), e se é ou não um outlier extremo (nesse caso, não é pois FALSE).</p>  
+  
+<p style="text-align: justify;">Na sequência, efetuamos o teste de normalidade. O teste usado para avaliar a normalidade para cada professor (grupo de dados) é o `shapiro_test`, também parte do pacote `rstatix`.</p>  
+  
+```{r Verificando normalidade por grupo, warning=FALSE, message=FALSE}
+dadosl %>% group_by(Professor) %>% 
+  shapiro_test(Nota)
+```
+  
+<p style="text-align: justify;">Rodando o teste, verificamos que todos os grupos (notas dos Professores 1, 2, 3 e 4) possuem distribuição normal, pois `p-test > 0,05`, conforme disposição da hipótese nula (aceitando H~0~) que, para o teste de normalidade diz:.</p>  
+  
+<p style="text-align: justify;">Assim, teremos:</p>  
+* H~0~: Distribuição dos dados = normal → p > 0,05  
+* H~1~: Distribuição dos dados ≠ normal → p ≤ 0,05  
+  
+<p style="text-align: justify;">Isso quer dizer que a distribuição das notas segue uma distribuição equilibrada.</p>  
+  
+<br>
+  
+## Passo 5: Construção do modelo da ANOVA com medidas repetidas (pacote `ez`), e analisando o modelo  
+  
+```{r, warning=FALSE, message=FALSE}
+mod.ANOVA <- ezANOVA(data = dadosl,
+                     dv = Nota,
+                     wid = ID,
+                     within = Professor,
+                     detailed = TRUE,
+                     type = 3)
+mod.ANOVA
+```
+  
+Temos que:  
+  
+* `dv` = variável dependente;  
+* `wid` = variável de identificação do sujeito;  
+* `within` = variável independente de medidas repetidas;  
+* `type` = tipo da soma dos quadrados (`default` é o tipo II, tipo III é o padrão no SPSS).  
+  
+<p style="text-align: justify;">O resultado da ANOVA, verificamos o modelo representado por uma reta que aponta intercepto diferente de zero, fato que não teria interpretação nesse caso, porque o que importa é o efeito da variável `Professor`, com grau de liberdade (`DF = n - 1`) tanto do modelo quanto do erro (`DFd`).</p>   
+  
+<p style="text-align: justify;">O modelo também apresenta a soma dos quadrados tanto do modelo (`SSn`) quanto dos erros (`SSd`).</p>  
+<p style="text-align: justify;">O resultado também reporta o `F-test` e o `p-test`, além dos testes da esfericidade de `Mauchly`, e as correções de `Greenhouse-Geisser [GG]` e `Huynh-Feldt [HF]`, cuja premissa de hipótese nula é apresentada como:</p>  
+  
+* H~0~: Os dados são esféricos → p > 0,05  
+* H~1~: Os dados **não** são esféricos → p ≤ 0,05  
+  
+<p style="text-align: justify;">Como o valor de p foi bem menor do que 0,05, consideramos válida a hipótese alternativa, que diz que não há esfericidade no modelo.</p>  
+  
+<p style="text-align: justify;">A hipótese nula da correção de esfericidade da ANOVA de medidas repetidas, é que a média do `Professor1` é igual à média do `Professor2`, que é igual a média do `Professor3` e do `Professor4` - ou seja, que não há diferença. Enquanto que a hipótese alternativa implica para haver uma única diferença entre as médias (das notas).</p>  
+  
+* H~0~: Média do P1 = P2 = P3 = P4 → p > 0,05  
+* H~1~: há pelo menos uma diferença entre as médias dos professores → p ≤ 0,05  
+  
+<p style="text-align: justify;">Como o resultado dos dados aponta para rejeição da hipótese nula (rejeitando H~0~), consideramos que há diferença entre as médias das notas aplicadas pelos professores. A pergunta que devemos responder agora é: *qual é essa diferença, e onde que ela está?* Para isso, efetuamos o *Teste de `post-hoc`, para verificar comparação entre partes.</p>  
+  
+<br>
+  
+## Passo 6: Teste de post-hoc  
+  
+Efetuamos comparações entre pares (corrigidos por `bonferroni`):  
+  
+```{r, warning=FALSE, message=FALSE}
+pairwise.t.test(dadosl$Nota, dadosl$Professor, paired = TRUE,
+                p.adjust.method = "bonferroni")
+```
+  
+Pela análise podemos verificar diferença entre as médias das notas entre cada `Professor` disposto na matriz.  
+  
+<br>
+  
+## Passo 7: Análise descritiva dos dados  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl %>% group_by(Professor) %>% 
+  get_summary_stats(Nota, type = "mean_sd")
+```
+  
+<p style="text-align: justify;">Analisando os dados percebemos que o professor menos rígido é o `Professor1` cujas médias ficaram maiores (*6.45*), e o professor mais rígido é o `Professor4`, cujas médias ficaram menores (*5.37*).</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+boxplot(Nota ~ Professor, data = dadosl, ylab = "Notas", xlab = "Professor")
+```
+  
+<br>
+<br>
+  
+# Resultados
+  
+<p style="text-align: justify;">A ANOVA de uma via com medidas repetidas mostrou que há efeito do professor sobre as notas [F(3, 87) = 22,34; p < 0,001]. A comparação entre pares com correção de `Bonferroni` mostrou que o `Professor4` dá, em média, notas menores que as dadas pelos demais professores. Além disso, o `Professor1` dá, em média, notas maiores que as dadas pelo `Professor2`.</p>  
+  
+<br>
+<br>

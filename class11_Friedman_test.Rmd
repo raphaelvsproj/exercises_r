@@ -1,0 +1,223 @@
+---
+title: "Teste de Friedman no R (trabalhando com dados em painel)"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: "cabecalho.html"
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+<p style="text-align: justify;">O `Teste de Friedman` seria uma alternativa não-paramétrica à ANOVA de uma via com medidas repetidas. Então, usaremos o mesmo `Banco de Dados 7.csv` para analisar o efeito da averiguação de notas de 30 alunos por quatro professores distintos.</p>  
+  
+<br>
+  
+# O que vamos executar?  
+  
+* Transpor o banco de dados do formato "wide" ("amplo") para o formato "long" ("longo" ou "dados em painel");  
+* Fazer o `Teste de Friedman` para mais de duas amostras dependentes;  
+* Fazer o `post-hoc` adequado ao teste de Friedman;  
+* Pedir a estatística descritiva dos dados.  
+  
+**Pressupostos**  
+* Variável dependente numérica ou ordinal;  
+* Variável independente formada por grupos dependentes (variável intrasujeito).  
+  
+<p style="text-align: justify;">**OBS:** Testes não-paramétricos, também conhecidos como testes de distribuição gratuita, são aqueles baseados em certas hipóteses, mas que não possuem uma organização normal. Geralmente, contêm resultados estatísticos provenientes de suas ordenações, o que os torna mais fáceis de entender.</p>  
+  
+<br>
+<br>
+  
+# Efetuando a análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados.  
+  
+```{r Carrgando os Pacotes, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr)                                
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix) 
+if(!require(reshape)) install.packages("reshape") 
+library(reshape) 
+if(!require(PMCMRplus)) install.packages("PMCMRplus") 
+library(PMCMRplus)   
+if(!require(ggplot2)) install.packages("ggplot2") 
+library(ggplot2) 
+```
+  
+<br>
+  
+## Passo 2: Carregar o banco de dados.  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+```{r Carregando Banco de Dados, warning=FALSE, message=FALSE}
+dados <- read.csv2('Banco de Dados 7.csv', stringsAsFactors = T)
+colnames(dados)[colnames(dados) == "ï..ID"] <- "ID"
+glimpse(dados)
+library(rmarkdown)
+paged_table(dados)
+```
+  
+<br>
+  
+## Passo 3: Alterar o formato do banco de dados de *"wide"* para *"long"* (pacote: `reshape`)  
+  
+### Reestruturando o banco de dados:  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl <- melt(dados,
+               id = "ID",
+               measured = c("Professor1", "Professor2", "Professor3", "Professor4"))
+```
+  
+<br>
+  
+### Renomeando as colunas do novo banco:  
+  
+```{r, warning=FALSE, message=FALSE}
+colnames(dadosl) = c("ID", "Professor", "Nota")
+```
+  
+<br>
+  
+### Ordenando as colunas pelo sujeito experimental:  
+
+```{r, warning=FALSE, message=FALSE}
+dadosl <- sort_df(dadosl, vars = "ID")
+glimpse(dadosl)
+```
+  
+<br>
+  
+### Transformando a variável ID em fator:  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl$ID <- factor(dadosl$ID)
+```
+  
+<br>
+  
+## Passo 4: Realizando o `Teste de Friedman`  
+  
+```{r, warning=FALSE, message=FALSE}
+friedman.test(Nota ~ Professor | ID, data = dadosl)
+```
+  
+<p style="text-align: justify;">Iniciamos o código dizendo qual é a nossa variável dependente, nesse caso é a variável `Nota`. Na sequência, colocamos qual será a variável independente, separada por um *~* e, nesse caso, será a variável `Professor`, e em seguida, colocamos qual a variável que identifica o sujeito, mas separado por uma barra vertical (variável `ID`).</p>  
+  
+<p style="text-align: justify;">O teste apresenta o valor de Qui-Quadrado, graus de liberdade (`df`) e o `p-value` que, nesse caso, apresenta valor menor que 0.05 (um valor bem pequeno, inclusive, 0.00000004), rejeitando a hipótese nula (H~0~).</p>  
+  
+<p style="text-align: justify;">Temos que o `Teste de Friedman` apresenta as hipóteses:</p>  
+  
+* H~0~: Mediana das diferenças = 0 → p > 0,05  
+* H~1~: Mediana das diferenças ≠ 0 → p ≤ 0,05  
+  
+<p style="text-align: justify;">Como esse é um teste não-paramétrico, o resultado não se baseará na média, porque será usado em um conjunto de dados em que a média não é uma boa representação - o `Tesde de Friedman` está focado em distribuição de dados, então se estivermos comparando conjunto de dados que tem um mesmo formato de distribuição, este teste acaba virando uma comparação entre medianas, mas se os formatos forem diferentes, pode ser que ele encontre uma diferença estatisticamente significante que não se deve à diferença de mediana, mas sim a de distribuições.</p>  
+  
+<p style="text-align: justify;">Verificamos, então, com o teste que existe diferença entre as medianas, mas a pergunta mais importante é: **onde está essa difeerença?** Ou seja, **qual(is) professor(es) está(ão) fornecendo um conjunto de maiores/menores notas?** Para isso, utilizamos os testes de `post-hoc`.</p>  
+  
+<br>
+  
+## Passo 5: Testes de `Post-hoc`:
+  
+### Opção 1: Wilcoxon com correção de Bonferroni.  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl %>% 
+  wilcox_test(Nota ~ Professor, paired = TRUE, p.adjust.method = "bonferroni")
+```
+  
+<p style="text-align: justify;">O teste apresenta as comparações possíveis, apresentando `p-value` com `p-adjusted`, valor que devemos considerar porque leva em conta a correção (ajuste) de bonferroni.</p>  
+  
+<br>
+  
+### Opção 2: post-hocs do pacote `PMCMRplus`, com correção Dunn-Bonferroni equivalente ao SPSS:  
+  
+```{r, warning=FALSE, message=FALSE}
+frdAllPairsSiegelTest(dadosl$Nota, dadosl$Professor,
+                      dadosl$ID, p.adjust.method = "bonferroni")
+```
+  
+<p style="text-align: justify;">Verificamos que os valores são significantes entre o `Professor4` e o `Professor1`, `Professor2` e `Professor3`, o que nos permite entender que o `Professor4`está dando nota cuja mediana é diferente de que a aplicada entre os outros professores.</p>  
+  
+<br>
+  
+### Opção 3: outros testes post-hoc:  
+  
+```{r, warning=FALSE, message=FALSE}
+frdAllPairsNemenyiTest(dadosl$Nota, dadosl$Professor,
+                       dadosl$ID, p.adjust.method = "bonferroni")
+
+
+frdAllPairsConoverTest(dadosl$Nota, dadosl$Professor,
+                       dadosl$ID, p.adjust.method = "bonferroni")
+```
+  
+<p style="text-align: justify;">A interpretação segue parecida para os outros dois testes.</p>  
+  
+<br>
+  
+## Passo 6: Análise descritiva dos dados  
+  
+Efetuamos a análise descritiva entre mediana e amplitude interquartil.
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl %>% group_by(Professor) %>% 
+  get_summary_stats(Nota, type = "median_iqr")
+```
+  
+<p style="text-align: justify;">Verificando a mediana e amplitude dos quatro professores, podemos notar que o `Professor4` foi o que apresentou um conjunto de menores notas do que os demais, enquanto que o `Professor1` foi o que aplicou as maiores notas.</p>  
+  
+<br>
+  
+## Passo 7: Visualização dos dados {.tabset .tabset-fade}
+  
+### Verificando os outliers dos dados:  
+  
+```{r, warning=FALSE, message=FALSE}
+boxplot(Nota ~ Professor, data = dadosl)
+```
+  
+<br>
+  
+### Análise das distribuições:  
+  
+```{r, warning=FALSE, message=FALSE}
+par(mfrow=c(2,2))
+hist(dadosl$Nota[dadosl$Professor == "Professor1"],
+     ylab = "Frequ?ncia", xlab = "Notas", main="Professor 1")
+hist(dadosl$Nota[dadosl$Professor == "Professor2"],
+     ylab = "Frequ?ncia", xlab = "Notas", main="Professor 2")
+hist(dadosl$Nota[dadosl$Professor == "Professor3"],
+     ylab = "Frequ?ncia", xlab = "Notas", main="Professor 3")
+hist(dadosl$Nota[dadosl$Professor == "Professor4"],
+     ylab = "Frequ?ncia", xlab = "Notas", main="Professor 4")
+```
+  
+<br>
+  
+### Histograma com todos os grupos, separados por cor:  
+  
+```{r, warning=FALSE, message=FALSE}
+ggplot(dadosl, aes(x = Nota)) +
+  geom_histogram(aes(color = Professor, fill = Professor),
+                 alpha = 0.3, position = "stack", binwidth = 1)
+```
+  
+<br>
+<br>
+  
+# Resultado  
+  
+<p style="text-align: justify;">O Teste de Friedman mostrou que há efeito do professor sobre as notas (X^2^~(3)~ = 32,41; p < 0,001). O post-hoc de Dunn-Bonferroni mostrou que as notas atribuídas pelo Professor 4 tendem a ser inferiores às notas atribuídas pelos Professores 1, 2 e 3.</p>  
+  
+<br>
+<br>
+  

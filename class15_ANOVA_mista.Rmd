@@ -1,0 +1,273 @@
+---
+title: "ANOVA mista no R (analisando dados em painel)"
+output:
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: cabecalho.html
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+  
+<p style="text-align: justify;">Consideramos como modelos mistos como aquele em que temos tanto variáveis independentes do tipo entre sujeitos, quanto variáveis independentes do tipo intra sujeitos. Então, para ser um delineamento misto temos que ter, pelo menos, uma variável *between-subjects* (intra sujeitos), formada por sujeitos experimentais iguais (como, por exemplo, o mesmo grupo de pessoas ao longo do tempo) e uma variável *within-subjects* (entre sujeitos), aquele tipo em que os grupos são formados por sujeitos experimentais diferentes (como medicamentos placebo e fórmula a ser estudada).</p>  
+  
+A ANOVA mista também pode ser chamada de ANOVA com medidas repetidas.  
+  
+# O que vamos executar? 
+  
+* Verificar os pressupostos (normalidade, homogeneidade de variâncias, esfericidade e ausência de *outliers*);  
+* Fazer a ANOVA mista;  
+* Analisar a diferença entre os grupos pelas "médias marginais estimadas" com correção de *Bonferroni*;  
+* Pedir o gráfico da interação e as estatísticas descritivas;  
+* Descrever os resultados.  
+  
+<br>
+<br>
+  
+# Situação problema  
+  
+<p style="text-align: justify;">O `Banco de Dados 7.4.csv` contém informações de 48 indivíduos (21 do gênero feminino e 27 do gênero masculino) submetidos a uma dieta e acompanhados ao longo do tempo. Foram aferidas 5 medidas de triglicérides e 5 medidas de peso. Uma antes do início da dieta e então uma acada semana. Verifique se há efeito da dieta sobre o triglicérides e se esse efeito depende do gênero. Descreva os resultados de forma apropriada.</p>  
+  
+<br>
+<br>
+  
+# Efetuando a Análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr)                                
+if(!require(ez)) install.packages("ez") 
+library(ez)
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)
+if(!require(reshape)) install.packages("reshape") 
+library(reshape)
+if(!require(car)) install.packages("car") 
+library(car)
+if(!require(emmeans)) install.packages("emmeans") 
+library(emmeans)
+if(!require(ggplot2)) install.packages("ggplot2") 
+library(ggplot2)
+if(!require(data.table)) install.packages("data.table") 
+library(data.table)
+library(rmarkdown)
+library(DT)
+```
+  
+<br>
+  
+## Passo 2: Carregar o banco de dados  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+Sys.setenv(TMPDIR = "C:/R-Temp") # Esse diretório temporário foi retificado por ser mais curto
+dados <- read.csv2('Banco de Dados 7.4.csv', stringsAsFactors = T,
+                   fileEncoding = "latin1")
+glimpse(dados)
+tabela1_dados <- datatable(dados, options = list(pageLength = 10))
+tabela1_dados
+```
+  
+<p style="text-align: justify;">Lembrar sempre que quando usamos `glimpse` é para verificar a categoria da variável dentro de seus respectivos grupos. Por exemplo, as variáveis `ID`, `TG.1`a `TG.5`, e `Peso.1` a `Peso.5` estão representadas por `<int>` que significa que os dados são apresentados em números inteiros; enquanto que a variável `Gênero` está representada por `<fct>` que significa fator (no caso, `Masculino` ou `Feminino`).</p>  
+  
+<br>
+  
+## Passo 3: Alterar o formato do banco de dados de "wide" para "long"  
+  
+<p style="text-align: justify;">Quando trabalhamos com banco de dados no modelo de painel, precisamos reestruturar a fim de evidenciar o recorte para cada elemento da análise, como nesse caso, as pessoas categorizadas pela variável `ID` qualificadas pelos triglicérides e pelo peso, assim como pelo gênero.</p>  
+  
+### Reestruturando o banco de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl <- reshape(dados, direction="long",
+                  idvar = "ID",
+                  varying = list(c("TG.1","TG.2","TG.3","TG.4","TG.5"),
+                                 c("Peso.1","Peso.2","Peso.3","Peso.4","Peso.5")),
+                  v.names = c("TG", "Peso"),
+                  timevar = "Tempo")
+```
+  
+<br>
+  
+### Ordenando as colunas pelo sujeito experimental  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl <- sort_df(dadosl, vars = "ID")
+glimpse(dadosl)
+```
+  
+<br>
+  
+### Transformando as variáveis `ID` e `Tempo` em fator:  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl$ID <- factor(dadosl$ID)
+dadosl$Tempo <- factor(dadosl$Tempo)
+
+tabela2_dadosl <- datatable(dadosl, options = list(pageLength = 10))
+tabela2_dadosl
+```
+  
+<br>
+  
+## Passo 4: Checar os pressupostos de normalidade e ausência de *outliers* (pacote: `rstatix`)
+  
+### Verificando a presença de *outliers* por grupo:  
+  
+<p style="text-align: justify;">Conforme o gráfico abaixo, verificamos presença de outliers no grupo `Masculino` de `ID` 1.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+boxplot(TG ~ Gênero:Tempo, dadosl)
+```
+  
+<br>
+  
+### Verificando a normalidade por grupo:  
+  
+<p style="text-align: justify;">Lembrando que os pressupostos do *Teste de Shapiro-Wilk* são:</p>  
+  
+* H~0~: Distribuição dos dados = normal → p > 0,05  
+* H~1~: Distribuição dos dados ≠ normal → p ≤ 0,05  
+  
+Nesse caso, verificamos que apenas os grupos `Masculino` e `Feminino`, analisados no `Tempo` 3, apresentam distribuição normal, com `p-value > 0.05`.  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl %>% group_by(Gênero, Tempo) %>% 
+  shapiro_test(TG)
+```
+  
+<br>
+  
+### Verificando a homogeneidade de variâncias:  
+  
+<p style="text-align: justify;">Os pressupostos do *Teste de Levene* são:</p>  
+  
+* H~0~: As variâncias dos grupos são homogêneas → p > 0,05  
+* H~1~: As variâncias dos grupos **não** são homogêneas → p ≤ 0,05  
+  
+```{r, warning=FALSE, message=FALSE}
+leveneTest(TG ~ Gênero, dadosl)
+```
+  
+<p style="text-align: justify;">Nesse caso, verificamos que o pressuposto de homogeneidade foi atendido, considerando que `p-value > 0.05`.</p>  
+  
+<p style="text-align: justify;">Analisando as premissas, verificamos que os dados não são válidos para seguir com teste paramétrico, então uma sugestão talvez seja transformar os dados porque não existe um teste não-paramétrico correspondente à ANOVA mista. Uma maneira de transformar os dados pode ser logaritmizando a variável dependente `TG`, e fazer o teste com `lnTG`.</p>  
+  
+<p style="text-align: justify;">Outra alternativa seria partirmos para outro modelo, que não assuma a normalidade como pressuposto - como o caso dos modelos lineares generalizados. Nesses modelos, a gente consegue dizer qual é a distribuição dos dados, sem atender aos quesitos de normalidade.</p>  
+  
+<br>
+  
+## Passo 5: Construção do modelo da ANOVA mista (pacote: `ez`)  
+  
+```{r, warning=FALSE, message=FALSE}
+mod.ANOVA <- ezANOVA(data = dadosl,
+                     dv = .(TG),
+                     wid = .(ID),
+                     within = .(Tempo),
+                     between = .(Gênero),
+                     detailed = TRUE,
+                     type = 3)
+```
+  
+Os argumentos utilizados pela função `ezANOVA` correspondem a:  
+  
+a) `dv` = variável dependente  
+b) `wid` = variável de identificação do sujeito  
+c) `within` = variável independente de medidas repetidas  
+d) `between` = variável independente entre sujeitos  
+e) `between_covariates` = covariável  
+f) `type` = tipo da soma dos quadrados (default é o tipo II, tipo III é o padrão no SPSS)  
+  
+<br>
+  
+## Passo 5: Analisando os resultados do modelo  
+  
+```{r, warning=FALSE, message=FALSE}
+options(scipen = 999) # comando que transforma a notação científica dos valores
+mod.ANOVA
+```
+  
+<p style="text-align: justify;">Sabemos que Esfericidade é a condição em que as variâncias das diferenças entre todas as combinações de grupos são iguais. No teste da ANOVA mista, verificamos que tem o aporte do teste de esfericidade e, quando ocorre de a hipótese nula ser rejeitada, a ANOVA mista efetua correção de *Green-Geisser (GG)* e de *Huynh-Feldt (HFe)*.</p>  
+  
+<p style="text-align: justify;">Os pressupostos da esfericidade são:</p>  
+  
+* H~0~: os dados são esféricos → p > 0,05  
+* H~1~: os dados **não** são esféricos → p ≤ 0,05  
+  
+<p style="text-align: justify;">Verificamos, então, que o teste rejeita a hipótese nula (H~0~) para esfericidade, o que nos permite considerar a correção de *Green-Geisser* e de *Huynh-Feldt* para a variável *Tempo* e interação *Gênero:Tempo*. Como a variável *Gênero* é intersujeito, analisamos apenas pela homogeneidade e, como vimos anteriormente, o teste não rejeitou a hipótese nula.</p>  
+  
+<p style="text-align: justify;">As premissas da ANOVA mista são:</p>  
+  
+* H~0~: há efeito das variáveis independentes (`Tempo`, `Gênero` ou `Gênero x Tempo`) sobre a variável dependente (`TG`) → p > 0,05  
+* H~1~: **não** há efeito das variáveis independentes (`Tempo`, `Gênero` ou `Gênero:Tempo`) sobre a variável dependente (`TG`) → p ≤ 0,05  
+  
+<p style="text-align: justify;">Verificamos pelo resultado do teste que `p-value < 0.05` para `Tempo` e a interação `Gênero:Tempo` corrigidas por *GG* e *HFe*, que há efeito sobre `TG`, mas não há efeito da variável `Gênero`, pois `p-value > 0.05`.</p>  
+  
+<p style="text-align: justify;">Sempre que temos a interação das variáveis independentes com efeito significativo sobre a variável dependente no modelo, a melhor maneira de entendermos o comportamento é através do gráfico, como podemos ver na sequência.</p>  
+  
+<br>
+  
+## Passo 6: Visualização das diferenças  
+  
+```{r, warning=FALSE, message=FALSE}
+ggplot(dadosl, aes(x = Tempo, y = TG, group = Gênero, color = Gênero)) +
+  geom_line(stat = "summary", fun.data = "mean_se", size = 0.8) +
+  geom_point(stat = "summary", fun = "mean") +
+  geom_errorbar(stat = "summary", fun.data = "mean_se", width = 0.2)
+```
+  
+<p style="text-align: justify;">Pelo gráfico podemos observar que houve uma mudança significativa nos triglicérides para o `Gênero Masculino` ao longo do tempo, enquanto que para o `Gênero Feminino`, o efeito parece ter se estabilizado nos cinco períodos. Para entender melhor isso, faremos os testes de *post-hoc* a fim de observar os efeitos caso a caso.</p>  
+  
+<br>
+  
+## Passo 7: Comparações entre partes (Testes de *post-hoc*)  
+  
+<p style="text-align: justify;">Primeiro efetuaremos o agrupamento entre gêneros a fim de comparar tempo a tempo, e depois agruparemos com tempo e comparar os dois gêneros.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+CompTempo <- dadosl %>% group_by(Gênero) %>%
+  emmeans_test(TG ~ Tempo, p.adjust.method = "bonf")
+
+tabela3_CompTempo <- datatable(CompTempo, options = list(pageLength = 10))
+tabela3_CompTempo
+```
+  
+<p style="text-align: justify;">Agrupando primeiramente os `Gêneros` para dentro do `Tempo`, podemos verificar que o teste aponta significância para o `Gênero Masculino` no `Tempo 1`, com os quatro outros momentos (`Tempo 2, 3 e 4`), coisa que já podemos observar pelo gráfico.  
+  
+```{r, warning=FALSE, message=FALSE}
+CompGen <- dadosl %>% group_by(Tempo) %>%
+  emmeans_test(TG ~ Gênero, p.adjust.method = "bonferroni")
+
+tabela4_CompGen <- datatable(CompGen, options = list(pageLength = 10))
+tabela4_CompGen
+```
+  
+<p style="text-align: justify;">Observamos, dessa forma, com os dados agrupados por `Tempo`, que temos significância estatística dentro do momento 1, comparando `Feminino` e `Masculino`, assim como dentro do momento 5.</p>  
+  
+<br>
+  
+## Passo 8 (opcional): Análise descritiva dos dados (pacote: `rstatix`)  
+  
+```{r, warning=FALSE, message=FALSE}
+dadosl %>% group_by(Tempo, Gênero) %>% 
+  get_summary_stats(TG, type = "mean_sd")
+```
+  
+<br>
+<br>
+  
+# Resultado
+  
+<p style="text-align: justify;">A ANOVA mista mostrou que há efeito do tempo [F(4,184) = 3,032; p = 0,027] interação entre o tempo e o gênero [F(4,184) = 3,082; p = 0,025]. As comparações entre pares subsequentes mostraram que não houve alteração nas concentrações de triglicerídeos no gênero feminino ao longo do tempo. Para o gênero masculino, houve uma queda das concentrações de triglicerídeos do primeiro para o segundo tempo analisados, e essas concentrações seguiram baixando nos tempos seguintes.</p>  
+  
+<br>
+<br>

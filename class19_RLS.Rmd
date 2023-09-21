@@ -1,0 +1,236 @@
+---
+title: "Regressão Linear Simples no R"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: cabecalho.html
+    theme: flatly
+    number_sections: no
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+<p style="text-align: justify;">Temos que a Regressão Linear Simples é um modelo que contém uma única variável independente.</p>  
+  
+# O que vamos executar?  
+  
+* Verificar os pressupostos da regressão linear: relação linear entre as variáveis, normalidade, homocedasticidade, ausência de outliers, independência dos resíduos;  
+* Montar e interpretar o modelo de regressão linear simples;  
+* Montar um gráfico incluindo a equação da reta;  
+* Descrever os resultados.    
+  
+<br>
+<br>
+  
+# Situação problema  
+  
+<p style="text-align: justify;">O "Banco de Dados 11.csv" contém informações de 187 CDs comercializados por uma gravadora. Verifique se o gasto em publicidade é capaz de prever a venda de CDs. Descreva os resultados de maneira apropriada.[^1]</p>
+[^1]: Curso de Estatística Aplicada no R, Professora Fernanda Peres: [link](https://www.youtube.com/playlist?list=PLOw62cBQ5j9VE9X4cCCfFMjW_hhEAJUhU)  
+  
+<br>
+<br>
+<br>
+<br>
+  
+# Efetuando a Análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr") 
+library(dplyr)
+if(!require(car)) install.packages("car") 
+library(car)
+if(!require(data.table)) install.packages("data.table") 
+library(data.table)
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)
+if(!require(lmtest)) install.packages("lmtest") 
+library(lmtest)
+if(!require(rlang)) install.packages("rlang") 
+library(rlang)
+if(!require(ggplot2)) install.packages("ggplot2", type = "binary") 
+library(ggplot2)
+if(!require(ggpmisc)) install.packages("ggpmisc") 
+library(ggpmisc)
+
+
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 2: Carregar o banco de dados  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+    
+```{r, warning=FALSE, message=FALSE}
+## Incluindo os dados
+dados <- read.csv2('Banco de Dados 11.csv',
+                    fileEncoding = "latin1")
+glimpse(dados)
+
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 3: Verificar os pressupostos  
+  
+<p style="text-align: justify;">Primeiramente verificamos a relação de linearidade entre as variáveis dependente e independente. Dessa forma, o modelo analisará o impacto da publicidade sobre o volume de vendas, logo: `VD = Vendas`, e `VI = Publicidade`.</p>  
+  
+<p style="text-align: justify;">A primeira coisa que podemos fazer para avaliar essa relação é um gráfico, a fim de visualizarmos como que as variáveis se relacionam.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Relação linear entre VD e VI:
+plot(dados$Publicidade, dados$Vendas)
+```
+  
+<p style="text-align: justify;">Somente por esse gráfico já podemos ver que, apesar da nuvem de pontos, a tendência segue um crescimento linear, o que nos permite observar que o pressuposto de linearidade dos parâmetros pode estar sendo atendido.</p>  
+  
+<p style="text-align: justify;">No entanto, para todas as outras coisas que precisamos ainda verificar, faremos isso ou sobre os resíduos do modelo, ou em cima do modelo em si (gráficos do modelo). O R gera quatro gráficos a partir de um modelo de regressão linear simples, que nos permite visualmente identificar se alguns pressupostos estão sendo atendidos. Veremos abaixo como gerar esses gráficos, e o que podemos extrair de informações a partir do que for plotado.[^2]</p>  
+  
+[^2]: Data Library Virginia: [link](https://data.library.virginia.edu/diagnostic-plots/)  
+  
+```{r, warning=FALSE, message=FALSE}
+# Construção do modelo
+mod <- lm(Vendas ~ Publicidade, dados)
+  
+# Análise gráfica
+par(mfrow = c(2,2)) # inserindo um quadro juntando os quatro gráficos que serão gerados
+plot(mod)
+par(mfrow = c(1,1)) # retomando a apresentação dos gráficos em unidade
+```
+  
+* <p style="text-align: justify;">O primeiro gráfico entitulado **"Residuals vs Fitted"** aponta os resíduos do modelo comparados com os valores previstos. Podemos analisar duas coisas: 1. a linearidade do modelo, observando a linha vermelha disposta no gráfico (se ela tiver ou não um segmento horizontal, coincidindo com a linha pontilhada), e 2. a homocedasticidade, dada pela homogeneidade de variâncias (distribuição de resíduos disposta de maneira constante ao longo do gráfico). Nesse caso, podemos ver que tanto o pressuposto de linearidade quanto de homocedasticidade estão sendo atendidos.</p>  
+  
+* <p style="text-align: justify;">O segundo gráfico entitulado **"Normal Q-Q"** nos permite ver se os resíduos seguem uma distribuição normal. Trata-se de um gráfico `qqplot`, trazendo no eixo y os resíduos padronizados e no eixo x os resíduos teóricos, que seriam os resíduos esperados caso a distribuição fosse normal. Caso os resíduos apresentem distribuição normal, precisariam aparecer concentrados sobre a linha pontilhada (padrão), o que visualmente podemos verificar que acontece com nosso modelo, nos permitindo entender que o pressuposto de normalidade está sendo atendido.</p>  
+  
+* <p style="text-align: justify;">O terceiro gráfico entitulado **"Scale Location"** é o mais recomendado para avaliar pressupostos de homocedasticidade pois caso seja atendido, podemos ver a linha em vermelho no gráfico tendendo a um formato horizontal. No gráfico temos os valores distribuídos, trazendo no eixo y a raiz quadrada dos resíduos padronizados e no eixo x também os valores esperados.</p>  
+  
+* <p style="text-align: justify;">O quarto gráfico entitulado **"Residuals vs Leverage"** é o que nos permite pensar em resíduo relacionado a existência de outliers. Então este é um gráfico para a gente pensar se há outliers e se existem pontos de alavancagem. Lembrando que temos um pressuposto na regressão é a ausência de outlers, mas nesse caso o que preocupa a análise são os pontos discrepantes de alavancagem (pontos tão distantes que podem influenciar a estimação do modelo). O gráfico apresenta uma linha tracejada apontando o intervalo da ***Cook's distance*** e na alavancagem (*Leverage*), de modo que se o ponto estiver fora da linha vermelha, este será um ponco com o qual devemos nos preocupar.</p>  
+  
+<p style="text-align: justify;">Tendo isso em vista, verificamos que os pressupostos de linearidade nos parâmetros, homocedasticidade, distribuição normal dos resíduos (normalidade) e ausência de outliers de alavancagem (*Leverage*) foram atendidos.</p> 
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 4: Analisando os pressupostos pelos testes
+  
+<p style="text-align: justify;">Apesar de a análise dos pressupostos se bastar pelos resultados gerados em gráficos, conforme visto anteriormente, é sabido que em estatística precisamos demonstrar os resultados partindo de testes para cada análise de interesse. Nesse caso, verificaremos os pressupostos de Normalidade, ausência de outliers, independência dos resíduos e homogeneidade a partir dos respectivos testes: `shapiro.test` para normalidade dos resíduos, `rstandard` para verificação dos outliers, `durbinWatsonTest` (Teste Durbin-Watson) para independência dos resíduos, e `bptest` para análise da homocedasticidade.</p>    
+  
+```{r, warning=FALSE, message=FALSE}
+# Normalidade dos resíduos
+shapiro.test(mod$residuals)
+```
+  
+<p style="text-align: justify;">A interpretação das hipóteses do teste de shapiro para normalidade dos resíduos serão dadas por:</p>  
+  
+* H~0~: Distribuição dos Dados = Normal → p > 0,05  
+* H~1~: Distribuição dos Dados ≠ Normal → p ≤ 0,05  
+  
+<p style="text-align: justify;">Onde o resultado aporta para aceitarmos a hipótese nula, com a normalidade da distribuição dos resíduos sendo atendida.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Outliers nos resíduos
+summary(rstandard(mod))
+```
+  
+<p style="text-align: justify;">Nesse caso temos uma situação onde os outliers não fogem do intervalo de -3 e +3, de modo que o modelo não possui valores que estejam fora do padrão de distribuição dos resíduos.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Independência dos resíduos (Durbin-Watson)
+durbinWatsonTest(mod)
+
+```
+  
+<p style="text-align: justify;">A estatística de *Durbin-Watson* recomenda que o valor observado esteja entre 0 e 1, e para o `p-value`, temos que a hipótese nula verifica a correlação entre os resíduos, de modo que:</p>    
+  
+* H~0~: Correlação entre os resíduos = zero (não existe correlação) → p > 0,05  
+* H~1~: Correlação entre os resíduos ≠ zero (existe correlação) → p ≤ 0,05  
+  
+<p style="text-align: justify;">Com isso, verificamos que o pressuposto da independência entre os resíduos também é atendido.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Homogeneidade (Breusch-Pagan)
+bptest(mod)
+```
+  
+<p style="text-align: justify;">Interpretamos esse teste de maneira semelhante como fazemos com o teste de Levene, onde a hipótese nula diz que há homocedasticidade, enquanto que a alternativa diz que não há.</p>  
+  
+* H~0~: Há homocedasticidade → p > 0,05  
+* H~1~: Não há homocedasticidade → p ≤ 0,05  
+  
+<p style="text-align: justify;">Com isso, verificamos que o pressuposto da homogeneidade também é atendido.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 5: Análise do modelo  
+  
+<p style="text-align: justify;">Verificados os pressupostos, partimos agora para a análise do modelo, onde encontramos os estimadores dos parâmetros Beta, assim como as estatísticas T e de `p-value`.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+summary(mod)
+```
+  
+<p style="text-align: justify;">Os pressupostos da estatística de `p-value` sobre os parâmetros (intercepto e beta1) nos permite avaliar se há interferência em eventual alteração nos valores das variáveis independentes sobre a variável analisada. E para um alfa de 5% (padrão de nossas análises), temos que:</p>  
+  
+* H~0~: Coeficiente = 0 → p > 0,05  
+* H~1~: Coeficiente ≠ 0 → p ≤ 0,05  
+  
+<p style="text-align: justify;">Logo, percebemos que o coeficiente da variável `Publicidade` pode ser interpretado, e tem um impacto sobre a variável `Vendas`.</p>  
+  
+<p style="text-align: justify;">Acerca do valor apontado para R^2^, temos o quanto que o modelo explica mudanças na variável dependente (36%).</p>  
+  
+<p style="text-align: justify;">Esse resultado apresenta também uma estatística T, condicionado aos graus de liberdade `df = 185`, apontando `p-value` que nos permite rejeitar a hipótese nula que diz que as vendas estariam sempre na média, de modo que o investimento em publicidade não alteraria em nada os resultados esperados.</p>  
+  
+* H~0~: O modelo criado não prevê alteração nas vendas = 0 → p > 0,05  
+* H~1~: O modelo criado prevê alteração nas vendas ≠ 0 → p ≤ 0,05  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 6: Gráfico de dispersão  
+  
+<p style="text-align: justify;">Para melhor visualizar o modelo de regressão linear simples, faremos um gráfico para visualizar o comportamento dos dados analisados, descrevendo a função gerada.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+ggplot(data = dados, mapping = aes(x = Publicidade, y = Vendas)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "red") +
+  stat_poly_eq(aes(label = paste(after_stat(eq.label), after_stat(adj.rr.label),
+                                 sep = "*plain(\",\")~~")),
+               label.x = 0.05, label.y = 400,
+               parse = TRUE, coef.digits = 5) +
+  theme_classic()
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+# Resultado  
+  
+<p style="text-align: justify;">A regressão linear simples mostrou que o investimento em publicidade está associado a um aumento da venda de CDs. A cada R$ 1,00 gasto em publicidade, a venda de CDs aumenta, em média, 0,1.</p>  
+  
+<br>
+<br>
+<br>
+<br>

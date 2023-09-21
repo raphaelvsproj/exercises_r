@@ -1,0 +1,289 @@
+---
+title: "Teste Qui-quadrado de independência no R"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: cabecalho.html
+    theme: flatly
+    number_sections: no
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+  
+<p style="text-align: justify;">O Qui-Quadrado de independência é o qui-quadrado que verifica a associação entre duas variáveis categóricas.</p>  
+  
+# O que vamos executar?  
+  
+* Calcular o qui-quadrado de independência (Pearson);  
+* Obter os resíduos padronizados ajustados;  
+* Fazer o "post-hoc" do qui-quadrado, através da análise dos resíduos ajustados, com correção do nível de significância;  
+* Pedir um gráfico para visualizar as células com maiores diferenças entre o esperado e o observado;  
+* Descrever os resultados.    
+  
+<br>
+<br>
+  
+# Situação problema  
+  
+<p style="text-align: justify;">O Banco de Dados com o qual trabalharemos contém os dados de pacientes que foram submetidos a um transplante renal. Determine se há associação entre a faixa etária e o desenvolvimento de diabetes melito (sim ou não) após transplante renal. Descreva os resultados de forma apropriada.</p>  
+  
+<p style="text-align: justify;">A intensão é ver se pessoas nas faixas etárias dos 30 anos, 30 a 50, e maiores de 50 anos, têm facilidade para desenvolver diabetes melito - entendemos que o teste qui-quadrado permite verificar isso. Observaremos que tanto as variáveis dependentes (diabetes melito sim ou não), quanto as de faixa etária, não são numéricas e sim categóricas - os números que veremos nas faixas etárias são uma frequência. Como buscamos ver a relação entre duas variáveis categóricas, aí é que usamos o teste de qui-quadrado.</p>  
+  
+Entendemos que no R existem duas formas de se trabalhar com qui-quadrado, e a primeira forma seria já inserir a tabela de contingências das duas variáveis categóricas
+  
+<br>
+<br>
+<br>
+<br>
+  
+# Efetuando a Análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr") 
+library(dplyr)
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)
+if(!require(psych)) install.packages("psych") 
+library(psych)
+if(!require(data.table)) install.packages("data.table")
+library(data.table)
+if(!require(DT)) install.packages("DT")
+library(DT)
+if(!require(knitr)) install.packages("knitr")
+library(knitr)
+if(!require(kableExtra)) install.packages("kableExtra")
+library(kableExtra)
+if(!require(corrplot)) install.packages("corrplot") 
+library(corrplot)
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 2: Carregar o banco de dados  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+<p style="text-align: justify;">Trabalharemos também com uma primeira opção onde o nosso banco de dados já estará em um formato de tabela de contingência, com as frequências distribuídas entre as faixas etárias analisadas, e os casos verificados (em **sim** e **não**)</p>  
+    
+```{r, warning=FALSE, message=FALSE}
+dadosC <- read.csv2('Banco de Dados 9.2 Contingencia.csv', row.names = 1,
+                    fileEncoding = "latin1")
+glimpse(dadosC)
+library(rmarkdown)
+
+kable(head(dadosC)) %>% 
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+  
+<br>
+<br>
+  
+<p style="text-align: justify;">Realizando o teste de Qui-Quadrado, verificamos o seguinte *p-valor*:</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+quiqua1 <- chisq.test(dadosC)
+quiqua1
+```
+  
+<br>
+<br>
+  
+<p style="text-align: justify;">Mas e quando temos uma tabela em formato padrão? Faremos do mesmo jeito com que usualmente trabalhamos:</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+Sys.setenv(TMPDIR = "C:/R-Temp") # Esse diretório temporário foi retificado por ser mais curto
+
+# Importando uma tabela que não está no formato padrão
+dados <- read.csv2('Banco de Dados 9.2.csv', stringsAsFactors = T,
+                   fileEncoding = "latin1")
+
+tab1 <- datatable(dados, options = list(pageLength = 10))
+tab1
+
+dados$Faixa_Etaria <- factor(dados$Faixa_Etaria,
+                             levels = c("Menos de 30 anos",
+                                        "30 a 50 anos",
+                                        "Mais de 50 anos"))
+
+tabela <- table(dados$Diabetes, dados$Faixa_Etaria)
+
+kable(head(tabela)) %>% 
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+
+# Rodando novamente o teste Qui-Quadrado:
+quiqua2 <- chisq.test(tabela)
+quiqua2
+
+# Podemos também apresentar o resultado sem que esteja em notação científica
+options(scipen = 999)
+quiqua2
+```
+  
+<br>
+<br>
+  
+<p style="text-align: justify;">A fim de entendermos o resultado do teste, precisamos considerar duas possibilidades de interpretação, e uma delas condiz a associação. Por exemplo, nesse caso como temos *Diabetes* e *Faixa Etária*, podemos dizer que a hipótese nula é que não há associação entre as variáveis. E, portanto a hipótese alternativa pode dizer que há associação entre o desenvolvimento de *Diabetes* e a *Faixa Etária*.</p> 
+  
+* H~0~: **não** há associação entre o desenvolvimento de diabetes e a faixa etária → p > 0,05  
+* H~1~: há associação entre o desenvolvimento de diabetes e a faixa etária → p ≤ 0,05  
+
+<br>
+  
+<p style="text-align: justify;">A segunda possibilidade diz respeito a condição de *Dependência* entre as variáveis. Nesse caso, pensaremos na hipótese nula como:</p>  
+  
+* H~0~: o desenvolvimento de diabetes **não** depende da faixa etária → p > 0,05  
+* H~1~: o desenvolvimento de diabetes depende da faixa etária → p ≤ 0,05  
+  
+<br>
+  
+<p style="text-align: justify;">O resultado do teste aporta que `p-value < 0.05`, aceitando a hipótese nula H~0~.</p>  
+  
+<br>
+  
+<p style="text-align: justify;">Já sabemos que existe influência da *Faixa Etária* no desenvolvimento de *Diabetes* no contexto analisado, mas precisamos ainda verificar como que essa influência acontece. Ou seja, será que ser mais velho favorece o aparecimento de diabetes? Será que a faixa etária intermediária é que favorece? A princípio não sabemos de nada disso, no entanto podemos descobrir olhando para os resíduos.</p>  
+  
+<p style="text-align: justify;">**Observações importantes:** Estamos nesse caso analisando uma tabela em formato **2x3**, mas no R temos um *standard* que efetua uma correção chamada de *Yates* (correção de continuidade), porque o que se entende é que o *p-valor* tende a ser menor do que deveria ser nesses casos. No entanto, essa correção é muito criticada por ser conservadora, e podemos desativar essa correção incluindo `correct = TRUE` ou `correct = FALSE` ao final do código, conforme o exemplo:</p>  
+  
+`>quiqua2 <- chisq.test(tabela, correct = TRUE)`  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 3: Análise das Frequências Esperadas  
+  
+<p style="text-align: justify;">Vale lembrar que só analisamos as frequências esperadas porque existe um pressuposto do teste Qui-Quadrado que é importante analisarmos. Então só vamos poder analisar depois de ter montado o teste.</p>  
+  
+**Pressuposto do Qui-Quadrado de Pearson:** as frequências esperadas são superiores a 5 (`freq > 5`).  
+
+```{r, warning=FALSE, message=FALSE}
+# Verificando as frequências esperadas
+quiqua2$expected
+```
+  
+<p style="text-align: justify;">Verificamos que todas as frequências esperadas são superiores a 5, o que nos permite seguir a análise com o *Qui-Quadrado de Pearson*.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 4: Análise dos resíduos padronizados ajustados  
+  
+<p style="text-align: justify;">Sabemos que o qui-quadrado compara a frequência que foi observada nos dados reais, com o que o teste identifica como frequência esperada (que vimos no passo anterior). E essa frequência é a que seria esperada caso não existisse associação entre as variáveis - ou seja, se não existisse associação entre *Diabetes* e *Faixa Etária*, as frequências que analisamos anteriormente seriam as frequências esperadas no banco de dados que estamos analisando.</p>  
+  
+<p style="text-align: justify;">Então se o qui-quadrado for estatisticamente significativo, significa que existe uma diferença entre as frequências observadas e as que seriam esperadas. Quando observamos nosso resultado, precisamos atentar para onde eventualmente existe essa diferença. Notamos que na faixa etária intermediária (30 a 50 anos), o resultado analisado e o esperado foi quase idêntico.</p>  
+  
+<p style="text-align: justify;">Nesse nosso caso, a diferença apareceu de maneira bem óbvia somente por olhar a tabela, que no nosso caso é pequena e fácil de ser analisada. Mas e quando temos um banco de dados maior? Como faremos para observar? Nesse caso, analisaremos através dos resíduos.</p>  
+  
+<p style="text-align: justify;">No R a gente tem duas formas de analisar, que são semelhantes a como podemos fazer também através do software SPSS:</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Resíduo Padronizado (SPSS) - resíduos de Pearson
+quiqua2$residuals
+
+# Resíduo Padronizado Ajustado:
+quiqua2$stdres
+
+```
+  
+  <br>
+    
+<p style="text-align: justify;">A questão agora é: como analisar esses resíduos? Verificamos dessa forma que os resíduos que são no modelo padronizado-ajustado (`quiqua2$stdres`) estão em uma unidade Z, e isso significa que a gente consegue pensar em significância enquanto pensamos em termos de distribuição normal padronizada.</p>  
+  
+<p style="text-align: justify;">Portanto, podemos considerar que vão ser células em que a diferença entre o observado e o esperado é estatisticamente significativa aquelas que tiverem o resíduo padronizado ajustado superior a 1.96 ou inferior a -1.96 (no nível de 5% de significância).</p>
+  
+> `-1.96 < Resíduos Significativos < 1.96`
+  
+<p style="text-align: justify;">Com isso, podemos observar que para o grupo de pessoas com menos de 30 anos, o desenvolvimento de diabetes ocorrendo com uma frequência menor do que o esperado, assim como uma frequência maior do desenvolvimento da diabetes para o grupo de pessoas com mais de 50 anos.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 5: Cálculo do ponto de corte para os resíduos padronizados
+  
+<p style="text-align: justify;">Podemos complementar a análise ainda dizendo que existem pessoas que recomendam, ao invés de usar o ponto de corte de 1.96 da distribuição normal, que a gente faça um ajuste de acordo com o tamanho da nossa tabela. Para isso, efetuaremos mudança em nosso nível de significância dado pelo valor de alfa.</p>  
+    
+<p style="text-align: justify;">Então, quando temos um número maior de observações, é ideal que esse nível de significância seja corrigido.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Calcular o novo alfa:
+## Sendo "l" o número de linhas e "c" o número de colunas
+## Dividiremos o 0.05 pelo produto de "c*l" (número de células)
+
+novoalfa <- 0.05/(nrow(tabela)*ncol(tabela))
+novoalfa
+
+# Calcular o novo ponto de corte, com base no novo alfa:
+## A divisão por dois é por se tratar de um teste bicaudal.
+
+qnorm(novoalfa/2)
+
+```
+
+<br>
+  
+<p style="text-align: justify;">Com isso, consideraremos signficativos os resíduos que estiverem no intervalo entre `r (qnorm(novoalfa/2))` e `r ((-1)*qnorm(novoalfa/2))`.</p>  
+  
+> ``r (qnorm(novoalfa/2))` < Resíduos Significativos < `r ((-1)*qnorm(novoalfa/2))`, considerando o novo alfa (`r (novoalfa)`)`  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 6: Cálculo do `p-value` para os resíduos  
+  
+<p style="text-align: justify;">Efetuaremos o cálculo do `p-value` a fim de identificar as células com valores estatisticamente significantes a partir do novo valor de alfa encontrado no passo anterior.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+round(2*(1-pnorm(abs(quiqua2$stdres))),6)
+```
+  
+Comparando com `r (novoalfa)`, temos que:  
+  
+* H~0~: Os valores são estatisticamente significantes → p > `r (novoalfa)`  
+* H~1~: Os valores **não** são estatisticamente significantes → p ≤ `r (novoalfa)` 
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 7: Representação visual dos resíduos ajustados
+  
+```{r, warning=FALSE, message=FALSE}
+corrplot(quiqua2$stdres, is.cor = FALSE,
+         method = "color",
+         tl.col = "black", tl.srt = 0)
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Resultado
+  
+<p style="text-align: justify;">O qui-quadrado de independência mostrou que há associação entre o desenvolvimento de diabetes e a faixa etária (X^2^~(2)~ = 23,914; p ≤ 0.001). A análise dos resíduos padronizados ajustados mostrou que há menos casos de diabetes na faixa etária "menos de 30 anos" e mais casos na faixa etária de "mais de 50 anos".</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  

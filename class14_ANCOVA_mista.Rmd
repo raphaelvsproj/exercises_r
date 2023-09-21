@@ -1,0 +1,267 @@
+---
+title: "Análise da Covariância no R"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: "cabecalho.html"
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+# O que vamos executar?
+  
+* Verificar os pressupostos da ANCOVA;  
+* Montar e interpretar o modelo de ANCOVA;  
+* Analisar a diferença entre os grupos pelas "médias marginais estimadas" e por teste de *post-hoc* (*Turkey*);  
+* Pedir as médias ajustadas;  
+* Descrever os resultados.  
+  
+<p style="text-align: justify;">Existem muitos pressupostos para a análise da covariância (ANCOVA) que precisa ser detalhada a fim de validar a informação extraída. Sabemos que a ANCOVA é uma ANOVA que inclui uma covariável, que será independente, contínua (numérica) e que vai entrar no modelo como uma variável de controle.</p>  
+  
+**Pressupostos:**  
+* Independência entre a covariável e a variável independente (VI);  
+* Relação linear entre a variável dependente (VD) e a covariável;  
+* Homogeneidade dos parâmetros de regressão;  
+* Homogeneidade de variâncias;  
+* Normalidade dos resíduos;  
+* Homocedasticidade e ausência de *outliers*.  
+  
+<br>
+<br>
+  
+# Situação problema  
+  
+<p style="text-align: justify;">O `Banco de Dados 8.csv` contém informações de 30 indivíduos. Verifique se o grau de instrução desses indivíduos tem efeito sobre os seus salários, controlando esse efeito pela idade. Descreva os resultados de forma apropriada.</p>  
+  
+<br>
+<br>
+  
+# Efetuando a Análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr)                  
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)
+if(!require(car)) install.packages("car")   
+library(car)             
+if(!require(ggplot2)) install.packages("ggplot2") 
+library(ggplot2)
+if(!require(multcomp)) install.packages("multcomp") 
+library(multcomp)
+if(!require(emmeans)) install.packages("emmeans") 
+library(emmeans)
+```
+  
+<br>
+  
+## Passo 2: Carregar o banco de dados.  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+dados <- read.csv2('Banco de Dados 8.csv', encoding = 'latin1')
+glimpse(dados)
+library(rmarkdown)
+paged_table(dados)
+```
+  
+<p style="text-align: justify;">Lembrar sempre que quando usamos `glimpse` é para verificar a categoria da variável dentro de seus respectivos grupos. Por exemplo, as variáveis `Sujeito`, `n_Filhos` e `Idade` estão representadas por `<int>` que significa que os dados são apresentados em números inteiros; as variáveis `Genero` e `Grau_Instrução` estão como `<chr>` que significa que são caracteres; a variável `Salário` está representada por `<dbl>`, que significa número real com uma casa decimal (*double*).</p>  
+  
+Teremos assim o modelo econométrico representado por:  
+**Variável Dependente (VD):** `Salário`  
+**Variável Independente (VI):** `Grau_Instrução`  
+**Covariável**: `Idade`  
+  
+<br>
+
+## Passo 3: Verificar se existe efeito da VI sobre a covariável (cov ~ VI)  
+  
+Pressuposto: "independência entre a VI e a covariável"  
+Se rompido: não há outro modelo - é um problema de delineamento experimental.  
+  
+```{r, warning=FALSE, message=FALSE}  
+mod_cov <- aov(Idade ~ Grau_Instrução, data = dados)
+summary(mod_cov)
+```
+<p style="text-align: justify;">Usamos a função `aov` porque é uma função de análise de variância e, nesse caso, colocamos a variável `Idade` como VD (pois é a nossa covariável), e o `Grau_Instrução` como VI.</p>  
+  
+<p style="text-align: justify;">Verificamos com a função `summary` que o modelo efetua uma ANOVA com `F-value`, graus de liberdade (`Df`), média, e um `p-value` dado por `Pr(>F)`., onde `p > 0.05`, o que nos permite interpretar aceitando a hipótese nula que, nesse caso, será:</p>  
+  
+* H~0~: **não** há efeito do grau de instrução sobre a idade → p > 0,05 
+* H~0~: há efeito do grau de instrução sobre a idade → p ≤ 0,05  
+  
+Verificamos então que esse pressuposto foi atendido - *e é o que precisamos prestar mais atenção!*  
+  
+<br>
+  
+## Passo 4: Verificar se a relação entre a covariável e a VD é linear (VD ~ cov)  
+  
+```{r, warning=FALSE, message=FALSE}
+ggplot(data = dados, aes(x = Idade, y = Salário, group = Grau_Instrução,
+                         color = Grau_Instrução)) +
+  geom_point(size = 2) +
+  xlab('Idade') +
+  ylab('Salário') +
+  geom_smooth(method = "lm", se = FALSE, size = 0.5)
+```
+  
+<p style="text-align: justify;">Nesse caso, verificamos que existe uma relação entre idade e salário, que aponta que o salário aumenta conforme a idade também aumenta.</p>  
+  
+<br>  
+  
+## Passo 5: Verificar se o efeito da covariável é o mesmo para todos níveis da VI (VD ~ VI*cov)  
+  
+Pressuposto: "homogeneidade dos parâmetros de regressão"  
+Compara as inclinações das retas para cada grupo da VI.  
+  
+```{r, warning=FALSE, message=FALSE}
+mod_int <- aov(Salário ~ Grau_Instrução*Idade, data = dados)
+Anova(mod_int, type = 'III')
+```
+<p style="text-align: justify;">Efetuamos um novo modelo, com a regressão dada pela VD `Salário` condicionada ao `Grau_Instrução` interagindo com a variável de referência (covariável) `Idade`. Com a regressão feita, verificamos os parâmetros não mais com a função `summary`, mas sim com a `Anova` porque queremos que o resultado seja analisado a partir da soma dos quadrados do tipo III (ver a aula de ANOVA de duas vias).</p>  
+  
+* H~0~: existe homogeneidade dos parâmetros de regressão → p > 0,05  
+* H~0~: **não** existe homogeneidade dos parâmetros de regressão → p ≤ 0,05  
+  
+<p style="text-align: justify;">Para vermos se as retas possuem a mesma inclinação, a interação entre `Grau_Instrução` e `Idade` não vai ser estatisticamente significativa `p > 0.05`, caracterizando hipótese nula para esse teste. Logo, vemos que todos os valores de `Pr(>F)` serão maiores que 5%, logo *existe homogeneidade dos parâmetros*.</p>
+  
+<br>
+  
+## Passo 6: Verificar se há homogeneidade de variâncias (VD ~ VI)  
+  
+Se rompido: versão robusta da ANCOVA  
+
+```{r, warning=FALSE, message=FALSE}
+leveneTest(Salário ~ Grau_Instrução, center = mean, data = dados)
+```
+  
+<p style="text-align: justify;">Os pressupostos do *Teste de Levene* são:</p>  
+  
+* H~0~: As variâncias dos grupos são homogêneas → p > 0,05  
+* H~1~: As variâncias dos grupos **não** são homogêneas → p ≤ 0,05  
+  
+<p style="text-align: justify;">Rodando o teste, verificamos `Pr(>F) > 0.05`, com valores estatisticamente não significantes, o que implica que os pressupostos até aqui foram todos atendidos.</p>  
+    
+<br>
+  
+## Passo 7: Ajustar o modelo de ANCOVA (VD ~ cov + VI)  
+  
+Tendo os pressupostos todos atendidos, efetuamos o modelo da ANCOVA.  
+Se os resultados forem avaliados pelo tipo I da soma dos quadrados, é obrigatório que a covariável seja inserida antes no modelo.  
+  
+```{r, warning=FALSE, message=FALSE}
+options(contrasts = c("contr.sum", "contr.poly"))
+mod_ANCOVA <- aov(Salário ~ Idade + Grau_Instrução, data = dados)
+Anova(mod_ANCOVA, type = 'III')
+```
+<p style="text-align: justify;">Agora sim podemos analisar os resultados de `p-value` para verificar se são estatisticamente significantes para as variáveis analisadas. Temos que a implicação do `Grau_Instrução`, controlado pela `Idade`, são menores que 5%, o que significa que têm impacto sobre o valor de `Salário`.</p>
+  
+<br>
+  
+## Passo 8: Verificar a normalidade dos resíduos  
+  
+Se rompido: versão robusta da ANCOVA  
+  
+```{r, warning=FALSE, message=FALSE}
+shapiro.test(mod_ANCOVA$residuals)
+```
+<p style="text-align: justify;">Lembrando que os pressupostos do *Teste de Shapiro-Wilk* são:</p>  
+  
+* H~0~: Distribuição dos dados = normal → p > 0,05  
+* H~1~: Distribuição dos dados ≠ normal → p ≤ 0,05  
+  
+Nesse caso, como `p-value > 0.05`, consideramos que os resíduos têm distribuição normal.  
+  
+<br>
+  
+## Passo 9: Verificar se há homocedasticidade e *outliers*  
+  
+```{r, warning=FALSE, message=FALSE}
+boxplot(mod_ANCOVA$residuals)
+par(mfrow=c(1,2))
+plot(mod_ANCOVA, which=c(1,3))
+leveneTest(mod_ANCOVA$residuals ~ dados$Grau_Instrução)
+```
+  
+<p style="text-align: justify;">Analisando os gráficos, primeiro do `boxplot`, verificamos que o modelo não possui *outliers* e, conforme os dois gráficos subsequentes, como os dados estão distribuídos de maneira homogênea, entendemos que há homocedasticidade no modelo. Além disso, também efetuamos um `Levene-test` para os resíduos, em que `p-value > 0.05`, o que nos permite concluir que as variâncias estão também homogêneas.</p>  
+  
+<br>
+  
+## Passo 10: Realização das comparações entre grupos {.tabset .tabset-fade}  
+  
+### Pelo pacote `multcomp`  
+  
+```{r, warning=FALSE, message=FALSE}
+library(multcomp)
+dados$Grau_Instrução <- factor(dados$Grau_Instrução)
+mod_ANCOVA <- aov(Salário ~ Idade + Grau_Instrução, data = dados)
+posthoc <- glht(mod_ANCOVA, linfct = mcp(Grau_Instrução = "Tukey"))
+summary(posthoc)
+## Outra opção: `Dunnett`, que compara todo o grupo com a variável de controle.
+```
+  
+<p style="text-align: justify;">Verificamos então que o modelo apresenta diferença estatisticamente significante apenas entre os dados para a diferença entre ensino superior e ensino médio, com `Pr(>|t|) < 0.05`.</p>  
+  
+<br>
+  
+### Pelo `rstatix`  
+  
+```{r, warning=FALSE, message=FALSE}
+comparacoes <- dados %>% emmeans_test(Salário ~ Grau_Instrução, covariate = Idade,
+                       p.adjust.method = "bonferroni")
+comparacoes
+```
+  
+<p style="text-align: justify;">O pacote "emmeans" (Estimated Marginal Means) é usado para realizar análises de médias marginais estimadas. Ele fornece uma maneira conveniente de calcular e interpretar as médias marginais em modelos lineares, generalizados e mistos.</p>  
+  
+<p style="text-align: justify;">Também oferece funcionalidades para realizar contrastes, comparações múltiplas, intervalos de confiança e gráficos relacionados às médias marginais estimadas. É especialmente útil quando você deseja comparar grupos específicos ou fazer inferências sobre os efeitos médios das variáveis em seus modelos.</p>  
+  
+<p style="text-align: justify;">Nesse caso, verificamos também que a diferença é apenas entre os dados observados para Ensino Superior e Ensino Médio, com `p-value < 0.05`.</p>  
+  
+<br>
+  
+## Passo 11: Obtenção das médias ajustadas {.tabset .tabset-fade}  
+  
+### Opção 1:  
+  
+```{r, warning=FALSE, message=FALSE}
+medias_ajustadas <- emmeans(mod_ANCOVA, ~ Idade:Grau_Instrução)
+medias_ajustadas
+```
+  
+<br>
+  
+### Opção 2:  
+  
+```{r, warning=FALSE, message=FALSE}
+get_emmeans(comparacoes)
+```
+  
+<br>
+  
+### Médias reais:  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% group_by(Grau_Instrução) %>% 
+  get_summary_stats(Salário, type = "mean_sd")
+```
+  
+<br>
+<br>
+  
+# Resultados  
+  
+<p style="text-align: justify;">O modelo de ANCOVA mostrou que há efeito do grau de instrução sobre o salário [F(2,26) = 4,54; p = 0,020], quando controlado pela idade do indivíduo. As comparações entre pares mostraram que há diferença entre os salários do grupo "ensino médio" e do grupo "ensino superior", sendo que esse último grupo apresenta, em média, salários maiores.</p>  
+  
+<br>
+<br>

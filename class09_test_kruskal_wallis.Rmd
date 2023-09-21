@@ -1,0 +1,181 @@
+---
+title: "Teste Não-Paramétrico de Wilcoxon no R (trabalhando com dados em painel)"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: "cabecalho.html"
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+**Objetivo:** comparar dois grupos independentes, utilizado quando a amostra não é normal.  
+  
+<p style="text-align: justify;">Geralmente, esse tipo de dado é bem representado pela "média", no entanto a mediana é uma medida de tendência central que representa muito melhor, consequentemente o desvio padrão não tende a representar de forma adequada esses dados, dando assim preferência à amplitude interquartil.</p>
+  
+  
+**O que vamos executar?**  
+* Fazer o teste de Kruskall-Wallis para mais de duas amostras independentes;  
+* Fazer o post-hoc adequado ao teste de Kruskall-Wallis;  
+* Pedir a estatística descritiva dos dados.  
+  
+**Pressupostos:**  
+* Variável dependente numérica ou ordinal;  
+* Variável independente formada por grupos independentes.  
+  
+<p style="text-align: justify;">**OBS:** Testes não-paramétricos, também conhecidos como testes de distribuição gratuita, são aqueles baseados em certas hipóteses, mas que não possuem uma organização normal. Geralmente, contêm resultados estatísticos provenientes de suas ordenações, o que os torna mais fáceis de entender.</p>  
+  
+<br>
+<br>
+  
+# Situação problema 
+  
+<p style="text-align: justify;">O `Banco de Dados 5.csv` contém informações de 31 indivíduos tratados com placebo, um anti-hipertensivo já em uso no mercado ou um anti-hipertensivo novo. Verificar se há efeito do tratamento sobre a pressão sistólica e os batimentos cardíacos desses indivíduos. Descrever os resultados de forma apropriada.</p>  
+  
+<br>
+<br>
+  
+# Efetuando o Teste  
+  
+Seguiremos alguns passos importantes a fim de reportar nossa análise.  
+  
+## Passo 1: Carregar os pacotes de dados.  
+  
+```{r Carregando Pacotes, warning = FALSE, message = FALSE}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr)
+if(!require(rstatix)) install.packages("rstatix")
+library(rstatix)
+if(!require(ggplot2)) install.packages("ggplot2")
+library(ggplot2)
+```
+  
+<br>
+  
+## Passo 2: Carregar o banco de dados.  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+```{r Imprtando Banco de Dados, warning = FALSE, message = FALSE}
+dados <- read.csv('Banco de Dados 5.csv', sep = ';', dec = ',')
+glimpse(dados)
+library(rmarkdown)
+paged_table(dados)
+```
+  
+<br>
+  
+## Passo 3: Realização do teste de *Kruskall-Wallis*.
+  
+<p style="text-align: justify;">Primeiro precisamos identificar qual é a nossa variável dependente, e nesse caso gostaríamos de comparar os três grupos, quanto aos batimentos cardíacos (BC) e pressão arterial (Pressao).</p>  
+  
+* Placebo (Grupo A),  
+* Anti-hipertensivo Novo (Grupo B), e  
+* Anti-hipertensivo Padrão (Grupo C).  
+  
+```{r Teste Kruskall-Wallis, warning=FALSE, message=FALSE}
+kruskal.test(BC ~ Grupo, data = dados)
+kruskal.test(Pressao ~ Grupo, data = dados)
+```
+<p style="text-align: justify;">Quando falamos desse teste em específico, estamos pensando na distribuição dos dados, porque o teste faz um ranqueamento dos valores e faz a análise estatística a partir desses postos. Portanto, a hipótese é que esses grupos apresentam distribuições diferentes. Se os grupos tiverem o mesmo formato de distribuição dos dados, estaremos comparando as medianas, mas se os formatos forem diferentes, então a comparação é de distribuição (porque apresentaria medianas diferentes). Então, as hipóteses nulas se referem às medianas.</p>  
+  
+<p style="text-align: justify;">Assim, teremos:</p>  
+* H~0~: Mediana do Grupo A = Mediana do Grupo B = Mediana do Grupo C = normal → p > 0,05  
+* H~1~: Mediana do Grupo A ≠ Mediana do Grupo B ≠ Mediana do Grupo C ≠ normal → p ≤ 0,05  
+  
+<p style="text-align: justify;">Considerando que para os batimentos cardíacos (BC) temos *p-value = 0.0001902 ≤ 0,05*, e para a pressão arterial (Pressao), o *p-value = 0.01166 ≤ 0,05*, rejeitando a hipótese nula H~0~ e aceitando a hipótese alternativa H~1~ para ambos os casos, o que quer dizer que existe pelo menos uma diferença entre as medianas dos grupos Placebo, Anti-Hipertensivo Novo e Anti-Hipertensivo Padrão.</p>  
+  
+<p style="text-align: justify;">O teste mostra que existe diferença, mas não diz que diferença seria essa, então nesse caso precisamos fazer um teste de *Post-Hoc*.</p>  
+  
+<br>
+  
+## Passo 4: Testes de Post-Hoc  
+  
+Efetuamos *Teste de Dunn* com ajuste do *p-value*:  
+```{r Dumm Test, warning=FALSE, message=FALSE}
+dunn_test(BC ~ Grupo, data = dados, p.adjust.method = "bonferroni")
+dunn_test(Pressao ~ Grupo, data = dados, p.adjust.method = "bonferroni")
+```
+  
+<p style="text-align: justify;">Podemos verificar pelos testes que existe diferença de *p-value* significativo nos batimentos cardíacos (BC) entre os grupos que tomaram AH Novo e o Placebo, e entre os grupos que tomaram AH Padrão e Placebo, mas não existe diferença entre os que tomaram o AH Novo  e o AH Padrão, pois *p-value ≤ 0.05*.</p>  
+  
+<p style="text-align: justify;">Agora para pressão arteria (Pressao), vemos diferença significativa apenas entre os grupos que tomaram AH Padrão e o Placebo, onde verificamos *p-value ≤ 0.05*.</p>  
+  
+<br>
+  
+## Passo 5: Análise descritiva dos dados    
+```{r Análise Descritiva dos Dados, warning=FALSE, message=FALSE}
+dados %>% group_by(Grupo) %>% 
+  get_summary_stats(BC, Pressao, type = "median_iqr")
+````
+  
+<br>
+  
+## Passo 6: Visualização dos Dados    
+  
+```{r Visualizando os Dados, warning=FALSE, message=FALSE}
+par(mfrow=c(1,2))
+boxplot(BC ~ Grupo, data=dados)
+boxplot(Pressao ~ Grupo, data=dados)
+```
+  
+<br>
+  
+## Passo 7: Distribuição dos Dados {.tabset .tabset-fade}  
+  
+### Diferença por Batimentos Cardíacos (BC):  
+
+```{r Distribuição dos Dados BC, warning=FALSE, message=FALSE}
+par(mfrow=c(1,3))
+hist(dados$BC[dados$Grupo == "Placebo"],
+     ylab = "Frequência", xlab = "bps", main="Placebo")
+hist(dados$BC[dados$Grupo == "AH Novo"],
+     ylab = "Frequência", xlab = "bps", main="AH Novo")
+hist(dados$BC[dados$Grupo == "AH Padrão"],
+     ylab = "Frequência", xlab = "bps", main="AH Padrão")
+```
+  
+### Diferença por Pressão Arterial (Pressao):  
+  
+```{r Distribuição dos Dados Pressao, warning=FALSE, message=FALSE}
+par(mfrow=c(1,3))
+hist(dados$Pressao[dados$Grupo == "Placebo"],
+     ylab = "Frequência", xlab = "bps", main="Placebo")
+hist(dados$Pressao[dados$Grupo == "AH Novo"],
+     ylab = "Frequência", xlab = "bps", main="AH Novo")
+hist(dados$Pressao[dados$Grupo == "AH Padrão"],
+     ylab = "Frequência", xlab = "bps", main="AH Padrão")
+```
+  
+## Histograma com todos os grupos, separados por cor {.tabset .tabset-fade}  
+  
+### Diferença por Batimentos Cardíacos (BC):  
+  
+```{r Histograma BC, warning=FALSE, message=FALSE}
+ggplot(dados, aes(x = BC)) +
+  geom_histogram(aes(color = Grupo, fill = Grupo),
+                 alpha = 0.3, position = "identity", binwidth = 10)
+```
+  
+### Diferença por Pressão Arterial (Pressao):  
+  
+```{r Histograma Pressao, warning=FALSE, message=FALSE}
+ggplot(dados, aes(x = Pressao)) +
+  geom_histogram(aes(color = Grupo, fill = Grupo),
+                 alpha = 0.3, position = "dodge", binwidth = 10)
+```
+  
+<br>
+<br>
+  
+# Resultado
+  
+<p style="text-align: justify;">Para as diferenças nos Batimentos Cardíacos (BC), o *Teste de Kruskall-Wallis* mostrou que há diferença entre os grupos (X^2^~(2)~ = 17,14; p < 0.05). O *post-hoc de Dunn* mostrou que o grupo "Placebo" (378 e 25,3, mediana e amplitude interquartil) é diferente dos grupos "AH Novo" (352 e 16,3) e "AH Padrão" (333 e 39,9).</p>  
+  
+<br>
+<br>

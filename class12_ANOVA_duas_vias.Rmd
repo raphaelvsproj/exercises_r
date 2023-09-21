@@ -1,0 +1,298 @@
+---
+title: "ANOVA de duas vias no R (trabalhando com dados em painel)"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: "cabecalho.html"
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+<p style="text-align: justify;">A ANOVA de duas vias trabalha com duas variáveis independentes entresujeitos (within), ou seja, aquelas variáveis independentes que não são de medidas repetidas.</p>  
+  
+# O que vamos executar?  
+  
+* Verificar os pressupostos (normalidade, homogeneidade de variâncias e ausência de *outliers*) por grupos [nos dados brutos] e para os resíduos;  
+* Fazer a ANOVA de duas vias;  
+* Analisar a diferença entre os grupos pelas "médias marginais estimadas" e por testes de post-hoc (Duncan, Bonferroni, Tukey HSD);  
+* Pedir o gráfico da interação e as estatísticas descritivas;  
+* Descrever os resultados.  
+  
+<br>
+<br>
+  
+# Situação problema 
+  
+<p style="text-align: justify;">O `Banco de Dados 6.csv` contém informações de 48 indivíduos (24 do gênero feminino e 24 do gênero masculino) divididos em três grupos: um grupo que não consumiu álcool, um grupo que consumiu duas canecas e um grupo que consumiu quatro canecas. Os indivíduos foram então submetidos a um teste de memória. Verifique se há efeito do gênero e do consumo de álcool sobre a memória. Descreva os resultados de forma apropriada.</p>  
+  
+<br>
+<br>
+  
+# Efetuando a análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr)                                
+if(!require(car)) install.packages("car")   
+library(car)                                
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)                                
+if(!require(DescTools)) install.packages("DescTools") 
+library(DescTools)
+if(!require(emmeans)) install.packages("emmeans") 
+library(emmeans)
+if(!require(ggplot2)) install.packages("ggplot2") 
+library(ggplot2)
+library(kableExtra)
+library(rmarkdown)
+library(htmltools)
+library(knitr)
+library(DT)
+```
+  
+<br>
+  
+## Passo 2: Carregar o banco de dados  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+dados <- read.csv2('Banco de Dados 6.csv', encoding = 'latin1')
+glimpse(dados)
+kable(head(dados, 10), col.names = c("Gênero", "Álcool", "Memória", "Latência")) %>% 
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+
+```
+<p style="text-align: justify;">O banco contém `r nrow(dados)` sujeitos experimentais, sendo `r length(which(dados$Genero=="Feminino"))` do gênero feminino.
+  
+<p style="text-align: justify;">Organizando a ordem dos dados, para que fique melhor apresentado no gráfico:</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+summary(dados$Alcool)
+dados$Alcool <- factor(dados$Alcool,
+                       levels = c("Nenhum",
+                                  "2 Canecas",
+                                  "4 Canecas"))
+summary(dados$Alcool)
+```
+  
+<br>
+  
+## Passo 3: Verificar os pressupostos nos dados brutos  
+  
+<p style="text-align: justify;">Lembrando que existe uma discussão sobre o teste dos pressupostos de normalidade, homogeneidade de variância e ausência de *outliers* nos *dados brutos* (na variável dependente) ou nos *resíduos do modelo*. Verificaremos que acaba dando na mesma, porque o resíduo da ANOVA nada mais é do que a diferença da média (da variável dependente) para a média do grupo, e nosso ponto de partida será a verificação dos pressupostos nos dados brutos.</p>  
+  
+<br>
+  
+### Verificação da normalidade - `shapiro-test` por grupo:  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% group_by(Genero, Alcool) %>% 
+  shapiro_test(Memoria)
+```
+  
+<p style="text-align: justify;">Pressupostos:</p>  
+* H~0~: Distribuição dos dados = normal → p > 0,05  
+* H~1~: Distribuição dos dados ≠ normal → p ≤ 0,05  
+  
+<p style="text-align: justify;">Rodando o teste, verificamos que todos os grupos (`Genero` e `Alcool`) possuem distribuição normal, pois `p-test > 0,05`, conforme disposição da hipótese nula (aceitando `H~0~`).</p>  
+  
+<br>  
+  
+### Verificação da presença de *outliers* por grupo:  
+  
+<p style="text-align: justify;">Podemos usar o próprio gráfico de `boxplot`, ou a função `identify_outliers` do pacote `rstatix`, lembrando que ambos acabam chegando a conclusões diferentes porque, por mais que utilizem o mesmo critério (baseando o *outlier* como um valor fora do 1,5 da amplitude interquartil), a grande diferença é que o `boxplot` usa os quartis calculados excluindo a mediana, e a função `identify_outliers` inclui a mediana. Em conjuntos muito grande de dados, isso não faz diferença, mas em conjunto menor de dados (como o caso desse exercício), verificamos diferença.</p>
+
+```{r, warning=FALSE, message=FALSE}
+boxplot(dados$Memoria ~ dados$Genero:dados$Alcool)
+```
+  
+Pelo gráfico podemos ver que não existem *outliers*, mas quando rodamos a função `identify_outliers`:  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% group_by(Genero, Alcool) %>% 
+  identify_outliers(Memoria)
+```
+  
+O modelo verifica 2 *outliers* para o grupo `Feminino`, e um com limite extremo no grupo das que não tomam álcool (`Nenhum`).  
+  
+### Verificação da homogeneidade de variâncias - `Levene-test` do pacote `car`:  
+  
+```{r, warning=FALSE, message=FALSE}
+leveneTest(Memoria ~ Genero*Alcool, dados, center = mean)
+```
+  
+<p style="text-align: justify;">Os pressupostos do *Teste de Levene* são:</p>  
+  
+* H~0~: As variâncias dos grupos são homogêneas → p > 0,05  
+* H~1~: As variâncias dos grupos **não** são homogêneas → p ≤ 0,05  
+  
+<p style="text-align: justify;">Analisando, então, o teste verificamos que o valor Pr(>F) apresentado foi de 0.2021, que é maior do que 0.05, aceitando a hipótese nula que indica que as variâncias dos grupos são homogêneas.</p>  
+  
+<br>
+  
+## Passo 4: Verificação dos pressupostos nos resíduos  
+  
+### Construção do modelo:  
+  
+```{r, warning=FALSE, message=FALSE}
+modelo <- aov(Memoria ~ Genero*Alcool, dados)
+```
+  
+### Teste de normalidade para os resíduos:  
+  
+```{r, warning=FALSE, message=FALSE}
+shapiro.test(modelo$residuals)
+```
+  
+<p style="text-align: justify;">O pressuposto do `Shapiro-test` é o mesmo, onde verificamos que a hipótese nula é validada com `p-value` = 0.6643 (p > 0.05), indicando que há normalidade na distribuição dos resíduos.
+  
+<br>
+  
+### Verificação da presença de *outliers* entre os resíduos:  
+  
+Podemos fazer da mesma forma que analisando por grupos, verificando primeiro a distribuição por boxplot:  
+  
+```{r, warning=FALSE, message=FALSE}
+boxplot(modelo$residuals)
+```
+ 
+E também pela função `identify_outliers`, criando uma coluna *Resíduos*:  
+  
+```{r, warning=FALSE, message=FALSE}
+dados$Residuos <- modelo$residuals
+paged_table(dados)
+dados %>% group_by(Genero, Alcool) %>% 
+  identify_outliers(Residuos)
+```
+  
+Verificamos que os mesmos *outliers* verificados na análise por grupo, são identificados aqui na análise sobre os resíduos.  
+  
+<br>
+  
+### Verificação da homogeneidade de variâncias - `Levene-test` (do pacote `car`):  
+  
+```{r, warning=FALSE, message=FALSE}
+leveneTest(Residuos ~ Genero*Alcool, dados, center = mean)
+```
+  
+<p style="text-align: justify;">Verificamos que o resultado, quando analisados em relação aos *Resíduos* é o mesmo que quando analisado em relação à *Memoria*, implicando no mesmo valor de `Pr(>F) = 0.2021`, que é maior do que 0.05, aceitando a hipótese nula que indica que as variâncias dos grupos são homogêneas.</p>  
+  
+<p style="text-align: justify;">Com isso verificamos que todos os ressupostos foram atendidos, e assim podemos seguir com a *análise da **ANOVA de duas vias**.*</p>  
+  
+<br>
+  
+## Passo 5: Realização da ANOVA  
+  
+<p style="text-align: justify;">Efetuamos, primeiro a mudança do contraste para que seja da soma (`contr.sum`), quando temos variáveis nominais, e o `contr.poly` quando temos variáveis ordinais.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+options(contrasts = c("contr.sum", "contr.poly"))
+```
+  
+### Criando o modelo:  
+  
+```{r, warning=FALSE, message=FALSE}
+modelo <- aov(Memoria ~ Genero*Alcool, dados) #sim, estamos reproduzindo o modelo feito anteriormente.
+summary(modelo)
+Anova(modelo, type = 'III')
+```
+  
+<p style="text-align: justify;">O modelo analisa se há efeito do Gênero sobre o consumo de álcool, com `F-value` e `p-value`, onde `p > 0.05`. Temos também o valor do efeito do Álcool, também com `F-value` e `p-value` e `p < 0.05`, assim como uma interação para Gênero e Álcool.</p>  
+  
+<p style="text-align: justify;">Verificamos, pelo resultado da ANOVA que os dados apresentam valores estatisticamente significantes sobre o impacto na Memória ligados a variável Alcool (sobre consumo de álcool) e da interação entre Gênero*Alcool, com `p < 0.05`.</p>  
+  
+Lembrando que o principal resultado é verificado com a interação entre as variávels Gênero e Álcool, onde vemos que o efeito do álcool sobre a memória depende do gênero (ou seja, existe uma dependência nos efeitos das variáveis independentes).</p>  
+  
+<br>
+  
+## Passo 6: Analisando as diferenças entre grupos - *Estimated Marginal Means* (pacote `emmeans`)  
+  
+<p style="text-align: justify;">Passamos a análise para as médias estimadas marginais, agrupando os dados e efetuando o teste `emmeans`, com ajuste de `bonferroni` para a estatística aplicada.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% group_by(Genero) %>% 
+  emmeans_test(Memoria ~ Alcool, p.adjust.method = "bonferroni")
+```
+  
+<p style="text-align: justify;">Pelo teste, verificamos que há uma diferença significante dos indicadores de Memória no grupo do Gênero Masculino quando comparamos os indivíduos que tomam nenhuma caneca para os que tomaram quatro canecas, e os que tomaram duas canecas para os que tomaram quatro canecas. No entanto, quando atentamos para o `p-value` do grupo do Gênero Feminino, nenhuma das comparações têm `p-value` significativo (todos apresentam `p > 0.05`) com impacto sobre os indicadores de Memória.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% group_by(Alcool) %>% 
+  emmeans_test(Memoria ~ Genero, p.adjust.method = "bonferroni")
+```
+  
+<p style="text-align: justify;">Rodando o teste por Alcool, separando os grupos de Genero, a comparação agrupada fica diferente. Verificamos o efeito de quem não tomou nenhuma caneca, entre os grupos Masculino e Feminino, assim como quem tomou duas ou quatro canecas e, pelo `p-value` apresentado, somente verificamos valores estatisticamente significantes para quem tomou quatro canecas sobre a memória nos grupos Masculino e Feminino (`p < 0.05`).</p>  
+  
+<p style="text-align: justify;">Entendemos que o problema de efetuar a análise dessa forma é que algumas comparações não são feitas. Podemos ainda perguntar se a pessoa do gênero feminino que tomou quatro canecas é diferente do homem que tomou nenhuma? Essas comparações conseguimos fazer através do teste de `post-hoc`.</p>  
+  
+<br>
+  
+## Passo 7: Análise post-hoc (pacote `DescTools`)  
+  
+Utilizaremos os modelos de `duncan`, *TurkeyHSD* (`hsd`) e *Bonferroni* (`bonf`).  
+  
+```{r, warning=FALSE, message=FALSE}
+PostHocTest(modelo, method = "duncan")
+PostHocTest(modelo, method = "hsd")
+PostHocTest(modelo, method = "bonf")
+```
+  
+<br>
+    
+## Passo 8: Gráfico de interação (Pacote `ggplot2`) {.tabset .tabset-fade}  
+  
+### Com gêneros com cores diferentes:  
+  
+```{r, warning=FALSE, message=FALSE} 
+ggplot(dados, aes(x = Alcool, y = Memoria, group = Genero, color = Genero)) +
+  geom_line(stat = "summary", fun.data = "mean_se", size = 0.6) +
+  geom_point(stat = "summary", fun = "mean") +
+  geom_errorbar(stat = "summary", fun.data = "mean_se", width = 0.2)
+```
+  
+<br>
+  
+### Com gêneros com linhas diferentes:  
+  
+```{r, warning=FALSE, message=FALSE}
+ggplot(dados, aes(x = Alcool, y = Memoria, group = Genero)) +
+  geom_line(stat = "summary", fun.data="mean_se", size = 0.6, aes(linetype = Genero)) +
+  geom_point(stat = "summary", fun = "mean", size = 2, aes(shape = Genero)) +
+  geom_errorbar(stat = "summary", fun.data = "mean_se", width = 0.2)
+```
+  
+<br>
+  
+## Passo 9: Análise descritiva dos dados - Pacote `rstatix`  
+  
+### Médias e desvios.  
+  
+```{r, warning=FALSE, message=FALSE}
+resumo <- dados %>% group_by(Genero, Alcool) %>% 
+  get_summary_stats(Memoria, type = "mean_sd")
+
+kable(resumo,
+      col.names = c("Gênero", "Álcool", "Variável", "n", "Média", "Desvio Padrão")) %>% 
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+  
+<br>
+<br>
+  
+# Resultados  
+  
+<p style="text-align: justify;">A ANOVA de duas vias mostrou que há efeito do álcool [F(2, 42) = 20,06; p < 0.05] e interação entre álcool e gênero [F(2, 42) = 11,91; p < 0.05] sobre os indicadores de memória. Análises subsequentes (médias marginais estimadas, com correção de Bonferroni) mostraram que o consumo de álcool não afetou a memória dos indivíduos do gênero feminino, mas o consumo de 4 canecas diminuiu o escore de memória dos indivíduos do gênero masculino, quando comparados a indivíduos do mesmo gênero que não consumiram álcool, ou consumiram apenas duas canecas.</p>  
+  
+<br>
+<br>

@@ -1,0 +1,315 @@
+---
+title: "MANOVA (ANOVA multivariada) com uma única variável independente no R (analisando dados em painel)"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: cabecalho.html
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+  
+<p style="text-align: justify;">A MANOVA é uma extensão da ANOVA que permite o uso de mais de uma variável dependente (seria uma ANOVA multivariada). No entanto, nesse nosso exemplo, efetuaremos a análise com uma única variável independente para mais de uma variável dependente.</p>  
+  
+# O que vamos executar?  
+  
+* Verificar a normalidade dos dados (univariada x multivariada);  
+* Verificar a homogeneidade das matrizes covariâncias-variâncias entre os grupos (teste M de Box - equivalente ao teste de Levene);  
+* Verificar se há *outliers* multivariados;  
+* Verificar se há multicolinearidade;  
+* Verificar a linearidade entre os pares de observações;  
+* Fazer, interpretar e descrever a MANOVA.  
+  
+<br>
+<br>
+  
+# Situação problema  
+  
+<p style="text-align: justify;">O `Banco de Dados 6.csv` contém informações de 48 indivíduos divididos em três grupos: um grupo que não consumiu álcool, um grupo que consumiu duas canecas e um grupo que consumiu quatro canecas. Os indivíduos foram então submetidos a um teste de memória, e o banco traz o escore nesse teste e a latência para responder às questões. Verifique se há efeito do consumo de álcool sobre a memória e sobre a latência através de uma análise multivariada. Descreva os resultados de forma apropriada.</p>  
+  
+<p style="text-align: justify;">Analisaremos o consumo de álcool como variável independente, este que possui três categorias: não consumir álcool, consumir duas canecas e consumir quatro canecas - esse consumo poderia ser representado em nosso modelo como variáveis independentes e categóricas. E para variáveis dependentes, trabalharemos com duas: `Memória` e `Latencia`.</p>  
+  
+<br>
+<br>
+  
+# Efetuando a Análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr)                                
+if(!require(car)) install.packages("car")   
+library(car)                                
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)                                
+if(!require(emmeans)) install.packages("emmeans") 
+library(emmeans)
+if(!require(ggplot2)) install.packages("ggplot2") 
+library(ggplot2)
+if(!require(MVN)) install.packages("MVN") 
+library(MVN)
+if(!require(GGally)) install.packages("GGally") 
+library(GGally)
+```
+  
+<br>
+  
+## Passo 2: Carregar o banco de dados  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+dados <- read.csv2('Banco de Dados 6.csv', stringsAsFactors = T,
+                   fileEncoding = "latin1")
+glimpse(dados)
+library(rmarkdown)
+paged_table(dados)
+```
+  
+<br>
+  
+## Passo 3: Verificação da normalidade MULTIVARIADA - por grupo:  
+  
+<p style="text-align: justify;">Verificamos que a MANOVA é uma ANOVA expandida para comportar mais variáveis dependentes. Então teremos alguns pressupostos que são muito parecidos com os da ANOVA, só que também estão expandidos, por exemplo, quando trabalhamos com a ANOVA, um dos pressupostos seria a normalidade por grupo (cada grupo tem que apresentar distribuição normal) e quando trabalhamos com a MANOVA, esse pressuposto valerá para todas as variáveis dependentes simultaneamente - isso seria a verificação da normalidade MULTIVARIADA. Verificaremos pelo *Shapiro-Test* e pelo teste de *Henze-Zirkler*.</p>  
+  
+### Teste de *Shapiro-Wilk* (pacote `rstatix`):  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% select(2:4) %>% group_by(Alcool) %>% 
+  doo(~mshapiro_test(.))
+# selecionamos as colunas de 2 a 4, agrupados pela variável Alcool e usamos a função doo para aplicar todas as variáveis no teste.
+
+```
+  
+<p style="text-align: justify;">Lembrando que os pressupostos do *Teste de Shapiro-Wilk* são:</p>  
+  
+* H~0~: Distribuição dos dados = normal → p > 0,05  
+* H~1~: Distribuição dos dados ≠ normal → p ≤ 0,05  
+
+<p style="text-align: justify;">Nesse caso, então, temos um problema quando para o grupo `Nenhum` temos que a hipótese nula é rejeitada, ou seja, os dados não possuem distribuição normal. No entanto, temos que o teste de *Shapiro* não é o melhor para análises multivariadas (mais de uma variável dependente), razão pela qual utilizamos o teste de *Henze-Zirkler*.</p>  
+  
+<br>
+  
+### Teste de *Henze-Zirkler* (pacote `MVN`):  
+  
+```{r, warning=FALSE, message=FALSE}
+mvn(data = dados[,2:4], subset = "Alcool", mvnTest = "hz")
+
+# De forma análoga selecionamos os dados de 2 a 4, dividido por grupo "Alcool".
+
+```
+  
+<p style="text-align: justify;">Os pressupostos do *Teste de Henze-Zirkler* são os mesmos, e segue a premissa de normalidade:</p>  
+  
+* H~0~: Distribuição dos dados = normal → p > 0,05  
+* H~1~: Distribuição dos dados ≠ normal → p ≤ 0,05  
+
+<p style="text-align: justify;">No entanto, o teste HZe calcula para normalidade univariada e multivariada. Verificamos também que o teste aporta normalidade para os três grupos, aceitando a hipótese nula para todos os casos, ou seja, atestando que os dados são normalmente distribuídos.</p>  
+  
+<br>
+  
+### Verificação da normalidade UNIVARIADA - por grupo:  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% group_by(Alcool) %>% 
+  shapiro_test(Latencia, Memoria)
+```
+  
+<p style="text-align: justify;">Aportamos a análise univariada com o *Teste de Shapiro* como um exemplo, pois caso o teste para análise multivariada tivesse aceito a hipótese nula para os três grupos, poderíamos também efetuar análise univariada com o mesmo método.</p>  
+  
+<br>
+  
+## Passo 4: Verificação da presença de *outliers* MULTIVARIADOS  
+  
+### Pela distância de *Mahalanobis* (*outlier* = `p < 0,001`)  
+  
+<p style="text-align: justify;">A função `mahalanobis_distance` já aporta a existência de outliers considerando a distância de 0.001. Nesse caso, não tem *outliers* conforme podemos ver na sequência:</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+outliersm <- dados %>% dplyr::select(2:4) %>% group_by(Alcool) %>% 
+  doo(~mahalanobis_distance(.)) %>% 
+  filter(is.outlier == TRUE)
+head(outliersm, 10)
+```
+  
+<br>
+  
+### Verificação da presença de *outliers* UNIVARIADOS - por grupo:  
+  
+```{r, warning=FALSE, message=FALSE}
+boxplot(dados$Memoria ~ dados$Alcool)
+boxplot(dados$Latencia ~ dados$Alcool)
+dados %>% group_by(Alcool) %>% 
+  identify_outliers(Memoria)
+dados %>% group_by(Alcool) %>% 
+  identify_outliers(Latencia)
+```
+  
+Assim, verificamos que os dados atendem aos pressupostos de normalidade e de ausência de *outliers*.  
+  
+<br>
+  
+## Passo 5: Verificação da homogeneidade das matrizes de covariâncias e variâncias  
+  
+<p style="text-align: justify;">Outra coisa importante a se preocupar para efetuar a análise da MANOVA, é com a homogeneidade das variâncias. Quando a gente pensa na ANOVA, a gente verifica se a variável dependente tem variâncias homogêneas em todos os grupos da variável independente - e fazemos isso efetuando o *Teste de Levene* (pelo pacote `car`).</p>  
+  
+<p style="text-align: justify;">Mas quando lidamos com ANOVA multivariada, já não dá para aplicarmos o *Teste de Levene*, porque ele funciona para quando a gente tem uma única variável dependente. Nesse caso, para a MANOVA, utilizamos o teste de *M de box*, que verifica a homogeneidade das matrizes de covariâncias e variâncias. O teste de *M de box* é muito sensível, então a recomendação é que atuemos com Alfa = 0.001 (estatisticamente significativo valores acima de 0,1%) e, se esse critério for rompido, tendo n iguais por grupo, corrigimos para *Pillai* e *Hotelling*. Caso os n sejam diferentes, uma opção é usar uma MANOVA robusta, com Alfa: 0,001.</p>  
+  
+<p style="text-align: justify;">Pressupostos do teste de *M de box*:</p>  
+  
+* H~0~: as matrizes de variância-covariância são homogêneas → p > 0.001
+* H~1~: as matrizes de variância-covariância **não** são homogêneas → p ≤ 0.001  
+  
+<p style="text-align: justify;">Nesse caso, como p > 0.001, não rejeitamos a hipótese nula e entendemos que os dados seguem também o pressuposto de homogeneidade das variâncias.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+box_m(dados[,3:4], dados$Alcool)
+```
+  
+<br>
+  
+### Verificação da homogeneidade de variâncias - teste de *Levene* (pacote `car`).  
+  
+<p style="text-align: justify;">Como depois da MANOVA, a gente faz a ANOVA e, para isso, também precisamos seguir parâmetros de homogeneidade de variâncias. Efetuamos agora a análise por meio do *Levene-test*, pensando em cada variável dependente em separado `Memoria` e `Latencia`.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Para ambos os casos, efetuamos o teste considerando o centro sendo a média dos valores:
+leveneTest(Memoria ~ Alcool, dados, center = mean) 
+leveneTest(Latencia ~ Alcool, dados, center = mean)
+```
+<p style="text-align: justify;">Segundo os pressupostos do teste, verificamos que rejeitamos a hipótese nula para `Memoria`, (pois `p-value < 0.05`), mas verificamos homogeneidade de variâncias para `Latencia` (pois `p-value > 0.05`).</p>  
+  
+<br>
+  
+## Passo 6: Verificação da presença de multicolinearidade  
+  
+<p style="text-align: justify;">As duas variáveis dependentes não podem ter uma correlação maior do que 0.9, porém temos que se a correlação for muito baixa, o teste não vai funcionar muito bem, mas a ideia é que não pode haver uma correlação alta demais (porque é como se as duas variáveis estivessem explicando a mesma coisa, o que acaba sendo solução a retirada de uma delas do modelo). A partir de uma matriz de correlação, analisamos os casos, onde:</p>  
+  
+### Matriz de correlação:  
+  
+```{r, warning=FALSE, message=FALSE}
+matriz <- cor(dados[,3:4])
+```
+  
+<p style="text-align: justify;">Nesse caso, a correlação entre `Memoria` e `Latencia` é verificada com os valores de -0.2322, menor do que o parâmetro, apontando que as variáveis não são significantemente correlacionadas - ou seja, não tem multicolinearidade.</p>   
+<br>
+  
+## Passo 7: Verificação da relação linear entre as variáveis dependentes por grupo  
+  
+<p style="text-align: justify;">Outro pressuposto importante para a ANOVA multivariada é a relação de linearidade entre os parâmetros. Para verificar isso no R, montamos um gráfico de dispersão por grupo.</p>  
+  
+<p style="text-align: justify;">O pressuposto é que a relação linear aconteça para cada um dos grupos independentes (três grupos de Alcool: Nenhum, Duas Canecas, Quatro Canecas).</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+pairs(dados[,3:4], pch = 19,
+      col = dados$Alcool)
+
+dplyr::select(dados, 2:4)
+
+graf <- dados %>% dplyr::select(2:4) %>% group_by(Alcool) %>% 
+  doo(~ggpairs(.), result = "plots")
+
+graf$plots[which=1]
+graf$plots[which=2]
+graf$plots[which=3]
+```
+  
+<p style="text-align: justify;">Verificamos pelos gráficos que não existe uma relação de linearidade entre os grupos e as variáveis dependentes, mas seguiremos com a MANOVA mesmo assim, a título de exemplo. Porém, o ideal, era essa ausência de linearidade.</p>  
+  
+<p style="text-align: justify;">**SPOILER!!!** Se a MANOVA não é o método mais adequado para análises de dados que não tenham relação de linearidade, qual seria o melhor para análise multivariada? A **análise de discriminante** seria uma opção, nesse caso. Mas seguiremos com a MANOVA.</p>  
+  
+<br>
+  
+## Passo 8: Modelo de MANOVA  
+  
+### Construção do modelo:  
+  
+<p style="text-align: justify;">Utilizamos a função `cbind` para unir as duas variáveis dependentes, e rodar o modelo. Verificamos, assim, que a estrutura segue a de um modelo linear com os parâmetros estimados de 15.875 para Álcool com y equivalendo a `Latencia`, e 3332.292 para Alcool, com a VD equivalendo a `Memoria`.</p>    
+  
+```{r, warning=FALSE, message=FALSE}
+modelo <- manova(cbind(Latencia, Memoria) ~ Alcool, data = dados)
+modelo
+```
+  
+<br>
+  
+### Análise dos resultados:  
+  
+<p style="text-align: justify;">Utilizamos o *teste de `Wilks`* para quando todos os pressupostos, e o *teste de `Pillai`* (mais robusto) para quando pelo menos um dos pressupostos não for atendido.</p>  
+  
+<p style="text-align: justify;">Seguindo os pressupostos da ANOVA multivariada, temos que:</p>  
+  
+* H~0~: há efeito global da variável independente `Alcool` sobre as variáveis dependentes juntas, `Memoria` e `Latencia` → p > 0,05  
+* H~1~: **não** há efeito da variável independente `Alcool` sobre as variáveis dependentes juntas, `Memoria` e `Latencia` → p ≤ 0,05  
+  
+O resultado do teste aporta que `p-value < 0.05` para ambos os testes, tanto *Wilks* quanto *Pillai*, aceitando a hipótese nula.  
+  
+```{r, warning=FALSE, message=FALSE}
+options(scipen = 999)
+summary(modelo, test = "Wilks")
+summary(modelo, test = "Pillai")
+```
+  
+<br>
+  
+### ANOVA univariada:  
+  
+<p style="text-align: justify;">Seguindo os pressupostos da ANOVA, temos que:</p>  
+  
+* H~0~: há efeito da variável independente `Alcool` sobre as variáveis dependentes separadas, `Memoria` e `Latencia` → p > 0,05  
+* H~1~: **não** há efeito da variável independente `Alcool` sobre as variáveis dependentes separadas, `Memoria` e `Latencia` → p ≤ 0,05  
+  
+O resultado do teste aporta que `p-value < 0.05`, aceitando a hipótese nula.  
+
+```{r, warning=FALSE, message=FALSE}
+summary.aov(modelo)
+```
+  
+<br>
+  
+## Passo 9: *Estimated Marginal Means* (Médias Marginais Estimadas, do Pacote `emmeans`)  
+  
+<p style="text-align: justify;">Verificamos a comparação entre pares de grupos a fim de ver a significância estatística de suas diferenças (se há diferenças entre quem bebeu nenhuma caneca para quem bebeu duas, e para quem bebeu quatro, assim como de para quem bebeu duas para quem bebeu quatro).</p>  
+  
+<p style="text-align: justify;">Efetuamos a análise das médias marginais estimadas, corrigidas por `bonferroni`, tanto para `Memoria` quanto para `Latencia`, e na sequência, fazemos um teste de *post-hoc*, com alfa também de 5%.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+dados %>% emmeans_test(Memoria ~ Alcool, p.adjust.method = "bonferroni")
+dados %>% emmeans_test(Latencia ~ Alcool, p.adjust.method = "bonferroni")
+```
+  
+Outra opção: *post-hocs*  
+  
+```{r, warning=FALSE, message=FALSE}
+TukeyHSD(x = aov(Memoria ~ Alcool, data=dados), "Alcool", conf.level = 0.95)
+TukeyHSD(x = aov(Latencia ~ Alcool, data = dados), 'Alcool', conf.level = 0.95)
+```
+  
+<br>
+  
+## Passo 10: Análise descritiva  
+  
+```{r, warning=FALSE, message=FALSE}
+ggplot(dados, aes(x = Latencia, y = Memoria, group = Alcool, color = Alcool)) +
+  geom_point()
+
+dados %>% group_by(Alcool) %>% 
+  get_summary_stats(Memoria, Latencia, type = "mean_sd")
+```
+  
+<br>
+<br>
+  
+# Resultado
+  
+<p style="text-align: justify;">A MANOVA mostrou que há efeito do consumo de álcool sobre a memória e a latência [Traço de Pillai = 0,614; F(4, 90) = 9,969; p < 0,001]. ANOVAs univariadas subsequentes mostraram que há efeito do álcool sobre a memória [F(2, 45) = 13,307; p < 0,001] e sobre a latência [F(2, 45) = 13,488; p < 0,001]. O post-hoc e Tukey mostrou que há diferenças entre o grupo "quatro canecas" e os demais, tanto para memória quanto para latência. Não houve diferença entre os grupos "nenhum álcool" e "duas canecas".</p>  
+  
+<br>
+<br>

@@ -1,0 +1,379 @@
+---
+title: "Regressão Linear Múltipla no R"
+output: 
+  html_document:
+    highlight: textmate
+    includes:
+      in_header: cabecalho.html
+    theme: flatly
+    number_sections: no
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+<p style="text-align: justify;">Temos que a Regressão Linear Múltipla é um modelo que contém uma única variável dependente e várias variáveis independentes.</p>  
+  
+# O que vamos executar?  
+  
+* Verificar os pressupostos da regressão linear: relação linear entre as variáveis, normalidade, homocedasticidade, ausência de outliers, independência dos resíduos e ausência de multicolinearidade;  
+* Montar e interpretar o modelo de regressão linear simples;  
+* Comparar diferentes modelos de regressão;  
+* Descrever os resultados.    
+  
+<br>
+<br>
+  
+# Situação problema  
+  
+<p style="text-align: justify;">O "Banco de Dados 12.csv" contém as notas de 200 alunos. Sabe-se que o tempo gasto revisando o conteúdo têm influência na nota. Verifique se o tempo de revisão e o tempo de sono pré-prova são capazes de prever a nota dos alunos. Descreva os resultados de forma apropriada.[^1]</p>
+[^1]: Curso de Estatística Aplicada no R, Professora Fernanda Peres: [link](https://www.youtube.com/playlist?list=PLOw62cBQ5j9VE9X4cCCfFMjW_hhEAJUhU)  
+  
+<br>
+<br>
+<br>
+<br>
+  
+# Efetuando a Análise  
+  
+É necessário seguir alguns passos importantes.  
+  
+## Passo 1: Carregar os pacotes de dados  
+  
+```{r, warning=FALSE, message=FALSE}
+if(!require(dplyr)) install.packages("dplyr") 
+library(dplyr)
+if(!require(car)) install.packages("car") 
+library(car)
+if(!require(data.table)) install.packages("data.table") 
+library(data.table)
+if(!require(knitr)) install.packages("knitr") 
+library(knitr)
+if(!require(kableExtra)) install.packages("kableExtra") 
+library(kableExtra)
+if(!require(rstatix)) install.packages("rstatix") 
+library(rstatix)
+if(!require(lmtest)) install.packages("lmtest") 
+library(lmtest)
+if(!require(rlang)) install.packages("rlang") 
+library(rlang)
+if(!require(ggplot2)) install.packages("ggplot2", type = "binary") 
+library(ggplot2)
+if(!require(ggpmisc)) install.packages("ggpmisc") 
+library(ggpmisc)
+if(!require(ggpubr)) install.packages("ggpubr") 
+library(ggpubr)
+if(!require(QuantPsyc)) install.packages("QuantPsyc") 
+library(QuantPsyc)
+if(!require(psych)) install.packages("psych") 
+library(psych)
+if(!require(scatterplot3d)) install.packages("scatterplot3d") 
+library(scatterplot3d)
+
+
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 2: Carregar o banco de dados  
+  
+<p style="text-align: justify;">Detalhe importante: selecionar o diretório de trabalho via *Session/Set Working Directory/Choose Directory*, a fim de importar o banco de dados de forma direta, sem ter que criar objeto.</p>  
+    
+```{r, warning=FALSE, message=FALSE}
+## Incluindo os dados
+dados <- read.csv2('Banco de Dados 12.csv',
+                    fileEncoding = "latin1")
+glimpse(dados)
+kable(head(dados)) %>% 
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 3: Efetuando a regressão  
+  
+<p style="text-align: justify;">Assim como fizemos anteriormente, na Regressão Linear Simples, verificamos primeiro a relação de linearidade entre as variáveis dependente e independente. Dessa forma, o modelo analisará o impacto do tempo de sono dos professores, e do tempo de revisão das provas sobre as notas dos alunos, logo: VD = `Notas`, e VI = `Tempo_Rev` e `Tempo_Sono`.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+## Construção do modelo:
+mod <- lm(Notas ~ Tempo_Rev + Tempo_Sono, dados)
+
+
+## Análise gráfica:
+par(mfrow=c(2,2)) # inserindo um quadro juntando os quatro gráficos que serão gerados
+plot(mod)
+par(mfrow=c(1,1)) # retomando a apresentação dos gráficos em unidade
+```
+  
+* <p style="text-align: justify;">O primeiro gráfico entitulado **"Residuals vs Fitted"** aponta os resíduos do modelo comparados com os valores previstos. Podemos analisar duas coisas: 1. a linearidade do modelo, observando a linha vermelha disposta no gráfico (se ela tiver ou não um segmento horizontal, coincidindo com a linha pontilhada), e 2. a homocedasticidade, dada pela homogeneidade de variâncias (distribuição de resíduos disposta de maneira constante ao longo do gráfico). Nesse caso, podemos ver que tanto o pressuposto de linearidade quanto de homocedasticidade estão sendo atendidos.</p>  
+  
+* <p style="text-align: justify;">O segundo gráfico entitulado **"Normal Q-Q"** nos permite ver se os resíduos seguem uma distribuição normal. Trata-se de um gráfico `qqplot`, trazendo no eixo y os resíduos padronizados e no eixo x os resíduos teóricos, que seriam os resíduos esperados caso a distribuição fosse normal. Caso os resíduos apresentem distribuição normal, precisariam aparecer concentrados sobre a linha pontilhada (padrão), o que visualmente podemos verificar que acontece com nosso modelo, nos permitindo entender que o pressuposto de normalidade está sendo atendido.</p>  
+  
+* <p style="text-align: justify;">O terceiro gráfico entitulado **"Scale Location"** é o mais recomendado para avaliar pressupostos de homocedasticidade pois caso seja atendido, podemos ver a linha em vermelho no gráfico tendendo a um formato horizontal. No gráfico temos os valores distribuídos, trazendo no eixo y a raiz quadrada dos resíduos padronizados e no eixo x também os valores esperados.</p>  
+  
+* <p style="text-align: justify;">O quarto gráfico entitulado **"Residuals vs Leverage"** é o que nos permite pensar em resíduo relacionado a existência de outliers. Então este é um gráfico para a gente pensar se há outliers e se existem pontos de alavancagem. Lembrando que temos um pressuposto na regressão é a ausência de outlers, mas nesse caso o que preocupa a análise são os pontos discrepantes de alavancagem (pontos tão distantes que podem influenciar a estimação do modelo). O gráfico apresenta uma linha tracejada apontando o intervalo da ***Cook's distance*** e na alavancagem (*Leverage*), de modo que se o ponto estiver fora da linha vermelha, este será um ponco com o qual devemos nos preocupar.</p>  
+  
+<p style="text-align: justify;">Tendo isso em vista, verificamos que os pressupostos de linearidade nos parâmetros, homocedasticidade, distribuição normal dos resíduos (normalidade) e ausência de outliers de alavancagem (*Leverage*) foram atendidos.</p> 
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 4: Analisando os pressupostos pelos testes (semelhante à RLS)
+  
+<p style="text-align: justify;">Da mesma forma como na análise da Regressão Linear Simples, apesar de a análise dos pressupostos se bastar pelos resultados gerados em gráficos, conforme visto anteriormente, é sabido que em estatística precisamos demonstrar os resultados partindo de testes para cada análise de interesse. Nesse caso, verificaremos os pressupostos de Normalidade, ausência de outliers, independência dos resíduos e homogeneidade a partir dos respectivos testes: `shapiro.test` para normalidade dos resíduos, `rstandard` para verificação dos outliers, `durbinWatsonTest` (Teste Durbin-Watson) para independência dos resíduos, e `bptest` para análise da homocedasticidade. *A diferença é que na Regressão Linear Múltipla, efetuamos o teste para verificar a* ***ausência de multicolinearidade***.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Normalidade dos resíduos
+shapiro.test(mod$residuals)
+```
+  
+<p style="text-align: justify;">A interpretação das hipóteses do teste de shapiro para normalidade dos resíduos serão dadas por:</p>  
+  
+* H~0~: Distribuição dos Dados = Normal → p > 0,05  
+* H~1~: Distribuição dos Dados ≠ Normal → p ≤ 0,05  
+  
+<p style="text-align: justify;">Onde o resultado aporta para aceitarmos a hipótese nula, com a normalidade da distribuição dos resíduos sendo atendida (o valor de p foi bem maior do que 5%, apontando para `p-value = 0.8269`).</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Outliers nos resíduos
+summary(rstandard(mod)) # normalisando o resíduo dentro da função summary com a função rstandard().
+```
+  
+<p style="text-align: justify;">A análise se pautará nos resíduos padronizados. Nesse caso temos uma situação onde os outliers não fogem do intervalo de -3 e +3, de modo que o modelo não possui valores que estejam fora do padrão de distribuição dos resíduos, logo, *não foram verificados outliers* fugindo do padrão, pois o máximo verificado foi de `2.6209702` e o mínimo de `-2.9693035`.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+# Independência dos resíduos (Durbin-Watson)
+durbinWatsonTest(mod)
+
+```
+  
+<p style="text-align: justify;">A estatística de *Durbin-Watson* recomenda que o valor observado esteja entre 0 e 1, e para o `p-value`, temos que a hipótese nula verifica a correlação entre os resíduos, de modo que:</p>    
+  
+* H~0~: Correlação entre os resíduos = zero (não existe correlação) → p > 0,05  
+* H~1~: Correlação entre os resíduos ≠ zero (existe correlação) → p ≤ 0,05  
+  
+<p style="text-align: justify;">Com isso, verificamos que *o pressuposto da independência entre os resíduos também é atendido*.</p>  
+  
+> Vale lembrara que os testes de Durbin-Watson e de Breusch-Pagan só funcionam quando estamos analisando uma amostra que tenha uma distribuição normal.  
+  
+<br>
+  
+```{r, warning=FALSE, message=FALSE}
+# Homogeneidade (Breusch-Pagan)
+bptest(mod)
+```
+  
+<p style="text-align: justify;">Interpretamos esse teste de maneira semelhante como fazemos com o teste de Levene, onde a hipótese nula diz que há homocedasticidade, enquanto que a alternativa diz que não há.</p>  
+  
+* H~0~: Há homocedasticidade → p > 0,05  
+* H~1~: Não há homocedasticidade → p ≤ 0,05  
+  
+<p style="text-align: justify;">Com isso, verificamos que o pressuposto também foi atendido, pois com `p-value` a `0.3721` (maior que 5%) *há homocedasticidade na distribuição*.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 5: O pressuposto da multicolinearidade  
+  
+<p style="text-align: justify;">Agora o pressuposto que surge com a análise da *Regressão Linear Múltipla* é para com a ausência de multicolinearidade, que se trata de uma correlação muito alta entre as variáveis independentes.</p>    
+  
+> Multicolinearidade: correlação muito alta entre as VIs.  
+  
+<p style="text-align: justify;">Ou seja, não importa a relação entre a VI e a VD, mas duas variáveis independentes não podem apresentar uma correlação muito alta entre elas. A gente consegue avaliar isso olhando simplesmente para um coeficiente de correlação - sugere-se que há multicolinearidade quando o coeficiente de correlação de Pearson r > 0.9 (ou 0.8) - ou atentando para um coeficiente chamado VIF (função `vif()`), onde o indicador VIF > 10 aponta para ocorrência de correlação alta entre as variáveis independentes do modelo.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+pairs.panels(dados) # Multicolinearidade: r > 0.9
+```
+  
+<p style="text-align: justify;">A função `pairs.painels()` cria um painel que cruza todas as variáveis independentes, criando:</p> 
+  
+* um gráfico de dispersão vendo as relações das variáveis de duas a duas;  
+* um coeficiente de relação para cada relação duas a duas das variáiveis independentes; e  
+* um histograma com as frequências de cada uma das variáveis (dependente e as independentes).  
+  
+<p style="text-align: justify;">Nesse caso temos apenas duas variáveis independentes: `Tempo_Rev` e `Tempo_Sono`, e na prática bastava fazermos um coeficiente de correlação entre as duas. Mas quando temos muitas variáveis independentes é interessante efetuarmos um painel para vermos tudo de uma vez só.</p>  
+  
+<p style="text-align: justify;">Entendendo os gráficos, percebemos que o valor de `0.6` é o coenficiente de correlação entre `Notas` e `Tempo_Rev`; `0.33` é o coenficiente de correlação entre `Notas` e `Tempo_Sono`; e `0.18` é o coeficiente de correlação entre `Tempo_Rev` e `Tempo_Sono`.</p>  
+  
+<p style="text-align: justify;">O que nos interessa nessa análise é a correlação de Person entre as variáveis independentes `Tempo_Sono` e `Tempo_Rev`, que nesse caso foi de r = `0.18`, que não pode ser acima de 0.9 (nesse caso, então, r < 0.9).</p>  
+  
+<p style="text-align: justify;">A partir dessa análise de painel já podemos concluir que não temos problemas de multicolinearidade nessa amostra de dados. Mas, como citado anteriormente, outra forma de analisar é usando a função `vif()` que já é nativa do R.</p>  
+  
+<br>
+  
+```{r, warning=FALSE, message=FALSE}
+vif(mod) # Multicolinearidade VIF > 10
+```
+  
+<p style="text-align: justify;">Verificamos, assim, que o valor de VIF aponta para `VIF Tempo_Rev` = 1.034254 e `VIF Tempo_Sono` = 1.034254, valor muito abaixo do ponto de corte (VIF > 10) e próximo ao valor desejado (VIF ~ 1), de modo a nos permitir concluir que não há multicolinearidade entre as variáveis `Tempo_Rev` e `Tempo_Sono`.</p>  
+  
+> A análise de multicolinearidade surte impacto na estimativa do cálculo dos coeficientes beta (positivo ou negativo), então caso haja multicolinearidade é possível que os betas não façam sentido.  
+  
+<p style="text-align: justify;">Vale lembrar que é importante compararmos modelos diferentes, como por exemplo, modelos em que tenhamos somente uma das variáveis independentes analisadas.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 6: Criando um segundo modelo  
+  
+<p style="text-align: justify;">Faremos agora uma regressão chamando de `mod2` apenas com o tempo de revisão como variável independente.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+mod2 <- lm(Notas ~ Tempo_Rev, dados)
+```
+  
+<p style="text-align: justify;">Agora, a partir daqui, repetiremos toda a análise dos pressupostos feitos na regressão `mod`, em que usamos as duas variáveis independentes em conjunto.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+## Análise do modelo
+summary(mod) # O modelo não está padronizado com a função rstandard(), então o intervalo dos resíduos (entre 3 e -3) não será significativo
+```
+  
+<p style="text-align: justify;">Lembrando que a interpretação para o teste-T segue as hipóteses:</p>  
+  
+* H~0~: Coeficiente beta = zero → p > 0,05  
+* H~1~: Coeficiente beta ≠ zero → p ≤ 0,05  
+  
+<p style="text-align: justify;">O coeficiente na primeira função nos diz que, a cada um minuto do tempo de revisão, a nota do aluno aumenta, em média, 0.1.</p>    
+  
+<p style="text-align: justify;">Da mesma forma para o tempo de sono tem impacto na nota (*hipótese alternativa H~1~ válida*), então a cada uma hora de sono, a nota do aluno aumenta, em média, 0.35.</p>   
+  
+<p style="text-align: justify;">A descrição também dá uma estatística F com p-value para avaliarmos as seguintes hipóteses para o modelo:</p>    
+  
+* H~0~: modelo criado = modelo nulo → p > 0,05  
+* H~1~: modelo criado ≠ modelo nulo → p ≤ 0,05  
+  
+<p style="text-align: justify;">Logo, para esse caso, aceitamos a hipótese alternativa que valida a capacidade de predição do modelo criado.</p>  
+  
+<p style="text-align: justify;">Outro detalhe vai para o fato de que o R^2^ ajustado indica que a variação dos coeficientes explica cerca de 40% do modelo.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+summary(mod2) # O modelo não está padronizado com a função rstandard(), então o intervalo dos resíduos (entre 3 e -3) não será significativo
+```
+  
+<p style="text-align: justify;">Efetuando a análise agora apenas sobre a regressão de Nota ~ Tempo_Rev, as conclusões que podemos tirar são parecidas, onde a cada um minuto do tempo de revisão, a nota do aluno aumenta, em média, 0.1.</p>  
+  
+<p style="text-align: justify;">Podemos observar também que o peso da variável `Tempo_Sono` se mostra numericamente mais significativo do que a variável `Tempo_Rev`, por surtir um impacto muito maior sobre as notas dos alunos. Mas **isso não é uma verdade**, não podemos fazer essa comparação porque o coeficiente de intercepto tem uma unidade de medida que depende das unidades do tempo de medida para as variáveis `Tempo_Sono` e `Tempo_Rev`.</p>  
+  
+Para fazermos essa comparação padronizada das unidades de medida, seguimos a análise a partir da função `lm.beta()` para cada um dos modelos, conforme abaixo:  
+  
+```{r, warning=FALSE, message=FALSE}
+## Obtenção dos coeficientes padronizados para o primeiro modelo
+lm.beta(mod)
+## Obtenção dos coeficientes padronizados para o segundo modelo
+lm.beta(mod2)
+
+```
+  
+<p style="text-align: justify;">Agora sim podemos ver, a partir do tempo padronizado para revisão das notas e para o sono, qual variável tem impacto maior sobre a nota e, pelo que o modelo aponta, o `Tempo_Rev` surte maior efeito sobre a nota do que `Tempo_Sono`.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+## Obtenção do IC 95% para os coeficientes - primeiro para o primeiro modelo
+confint(mod)
+## Obtenção do IC 95% para os coeficientes - agora para o segundo modelo
+confint(mod2)
+
+```
+  
+<p style="text-align: justify;">Outra coisa importante de se analisar é o intervalo de confiança (IC) a partir da função nativa do R `confint()` colocando limite superior e inferior do intervalo. Mas como interpretamos essas informações? Verificamos separadamente que o `Tempo_Rev` vai de 0.0796 a 0.1186, e o `Tempo_Sono` vai de 0.1789 a 0.5224. Portanto, não incluem zero no intervalo inferior e superior, o que implica que são estatisticamente significantes.</p>  
+  
+<p style="text-align: justify;">É interessante percebermos que para o intercepto, assim como apontado acima que o valor da estatística do `p-value` era maior que 0.05, temos que em `confint()` o valor de zero é incluído no intervalo inferior e superior, concordando que para esse nosso modelo, o intercepto não interfere na interpretação.</p>   
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 7: Comparando os dois modelos de maneira direta  
+  
+<p style="text-align: justify;">Temos a função `AIC()` que explica a variância não explicada pelo modelo, então quanto menor for o valor, melhor par a significância de nossa análise.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+AIC(mod, mod2)
+```
+  
+<p style="text-align: justify;">Verificamos assim que existe uma diferença de cerca de dez pontos para menos do primeiro modelo para o segundo, implicando que o modelo de regressão linear múltipla ser o melhor para explicar a nossa análise.</p>  
+  
+<p style="text-align: justify;">De maneira semelhante temos a função `BIC()`, que também sugere quanto menor o modelo referente ao outro, melhor para explicar nossa análise.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+BIC(mod, mod2)
+```
+  
+<p style="text-align: justify;">Ou seja, o modelo de regressão linear múltipla é o mais adequado para explicar nossa situação problema. Mas podemos ainda verificar essa comparação de modo aninhado. Para isso, efetuaremos o teste da ANOVA para `mod` e `mod2`.</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+anova(mod, mod2)
+```
+  
+<p style="text-align: justify;">Temos como resultado um `p-value` com base em uma estatística F. Essa análise de variância terá como hipótese nula que os modelos `mod` e `mod2` são iguais, ou seja, que o desempenho sobre as notas será idêntico. E como hipótese alternativa, que eles são diferentes estatísticamente.</p>  
+  
+* H~0~: modelo RLM = modelo RLS → p > 0,05  
+* H~1~: modelo RLM ≠ modelo RLS → p ≤ 0,05  
+  
+<p style="text-align: justify;">Nesse caso, teremos que a função que remete ao teste `anova()` identifica os dois modelos como sendo diferentes. Mas e como sabemos qual o modelo que será o melhor? Olharemos para o *Resudual sum of squares (RSS)* resultantes desse teste.</p>  
+  
+<p style="text-align: justify;">É possível observar que par ao modelo 1 o RSS é menor que o modelo 2, portanto podemos observar que o modelo de regressão linear múltipla é de fato melhor para prever os dados analisados.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 8: Análise gráfica  
+  
+<p style="text-align: justify;">Podemos efetuar a análise sobre um gráfico 3D para observar o comportamento das variáveis independentes explicando a variável `Notas`, mas apenas para um aspecto visual porque em análises de regressão linear múltipla, os gráficos acabam não sendo tão necessários como na análise de regressão linear simples (que tem apenas uma variável independente).</p>  
+  
+```{r, warning=FALSE, message=FALSE}
+graph <- scatterplot3d(dados$Notas ~ dados$Tempo_Rev + dados$Tempo_Sono,
+                       pch = 16, angle = 30, color = "steelblue", box = FALSE,
+                       xlab="Tempo de revis?o", ylab="Tempo de sono", zlab="Notas")
+graph$plane3d(mod, col="black", draw_polygon = TRUE)
+```
+  
+<br>
+<br>
+<br>
+<br>
+  
+## Passo 9: Método automatizado de seleção do modelo  
+  
+<p style="text-align: justify;">É possível ainda prevermos um modelo a partir de critérios matemáticos que vão escolher quais as variáveis independentes melhor se ajustam para explicar a variável dependente. Podemos efetuar essa automatização a partir das funções do pacote `MASS`[^2]:</p>  
+[^2]: Material consultado: [link](https://rpubs.com/bensonsyd/385183)
+  
+```{r, warning=FALSE, message=FALSE}
+mod.inicial <- lm(Notas ~ Tempo_Rev + Tempo_Sono, data = dados)
+mod.simples <- lm(Notas ~ 1, data = dados)
+
+stepAIC(mod.inicial, scope = list(upper = mod.inicial,
+                                  lower = mod.simples), direction = "backward")
+```
+  
+<p style="text-align: justify;">Apesar de nesse caso ter sido considerado como melhor modelo o que contém todas as variáveis independentes, verificamos que esse método não é o mais adequado porque não se baseia em critérios teóricos para interpretar a situação problema proposta.</p>  
+  
+<br>
+<br>
+<br>
+<br>
+  
+# Resultado  
+  
+<p style="text-align: justify;">A nossa análise de regressão linear múltipla mostrou que o tempo de revisão e o tempo de sono têm efeito sobre as notas. A cada um minuto gasto revisando o conteúdo, a nota aumenta, em média, 0.1 (t = 10,005; p < 0,001). Já a cada uma hora de sono, a nota aumenta, em média, 0.35 (t = 4,026; p < 0,001).</p>  
+  
+<br>
+<br>
+<br>
+<br>
+
